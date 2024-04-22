@@ -13,7 +13,7 @@
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <Import Project="..\Common.Pre.props" />
   <PropertyGroup Label="Configuration">
-    <ConfigurationType>StaticLibrary</ConfigurationType>
+    <ConfigurationType>Application</ConfigurationType>
     <PlatformToolset>v143</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
@@ -66,6 +66,7 @@
     <ClInclude Include="ImGuiHelper.h" />
     <ClInclude Include="ImGuiImpl.h" />
     <ClInclude Include="include\Magpie.Core.h" />
+    <ClInclude Include="json.hpp" />
     <ClInclude Include="OverlayDrawer.h" />
     <ClInclude Include="Renderer.h" />
     <ClInclude Include="ScalingOptions.h" />
@@ -80,6 +81,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="BackendDescriptorStore.cpp" />
+    <ClCompile Include="CLI.cpp" />
     <ClCompile Include="CursorManager.cpp" />
     <ClCompile Include="CursorDrawer.cpp" />
     <ClCompile Include="DesktopDuplicationFrameSource.cpp" />

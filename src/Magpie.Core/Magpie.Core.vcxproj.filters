@@ -92,6 +92,7 @@
       <Filter>Capture</Filter>
     </ClInclude>
     <ClInclude Include="ExclModeHelper.h" />
+    <ClInclude Include="json.hpp" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ScalingRuntime.cpp" />
@@ -148,6 +149,7 @@
     </ClCompile>
     <ClCompile Include="ExclModeHelper.cpp" />
     <ClCompile Include="ScalingOptions.cpp" />
+    <ClCompile Include="CLI.cpp" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\SimpleVS.hlsl">

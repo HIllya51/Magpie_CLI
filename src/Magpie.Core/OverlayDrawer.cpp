@@ -22,8 +22,8 @@ namespace Magpie::Core {
 static const char* COLOR_INDICATOR = "■";
 static const wchar_t COLOR_INDICATOR_W = L'■';
 
-OverlayDrawer::OverlayDrawer() :
-	_resourceLoader(winrt::ResourceLoader::GetForViewIndependentUse(CommonSharedConstants::APP_RESOURCE_MAP_ID))
+OverlayDrawer::OverlayDrawer() //:
+	//_resourceLoader(winrt::ResourceLoader::GetForViewIndependentUse(CommonSharedConstants::APP_RESOURCE_MAP_ID))
 {}
 
 static constexpr const ImColor TIMELINE_COLORS[] = {
@@ -306,9 +306,10 @@ void OverlayDrawer::MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) noexc
 static const std::wstring& GetAppLanguage() noexcept {
 	static std::wstring language;
 	if (language.empty()) {
-		winrt::ResourceContext resourceContext = winrt::ResourceContext::GetForViewIndependentUse();
-		language = resourceContext.QualifierValues().Lookup(L"Language");
-		StrUtils::ToLowerCase(language);
+		language=L"en-us";
+		// winrt::ResourceContext resourceContext = winrt::ResourceContext::GetForViewIndependentUse();
+		// language = resourceContext.QualifierValues().Lookup(L"Language");
+		// StrUtils::ToLowerCase(language);
 	}
 	return language;
 }
@@ -1127,7 +1128,7 @@ const std::string& OverlayDrawer::_GetResourceString(const std::wstring_view& ke
 		return it->second;
 	}
 
-	return cache[key] = StrUtils::UTF16ToUTF8(_resourceLoader.GetString(key));
+	return cache[key] = StrUtils::UTF16ToUTF8(key);// _resourceLoader.GetString(key));
 }
 
 }
