@@ -114,7 +114,7 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json &config, int p
     //     return false;
     // }
 
-    options.graphicsCard = profile["graphicsCard"];
+    // options.graphicsCardId = profile["graphicsCard"];
     options.captureMethod = profile["captureMethod"];
     // options.IsVSync(profile["VSync"]);
     // options.IsTripleBuffering(profile["tripleBuffering"]);
