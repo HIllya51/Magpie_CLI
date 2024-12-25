@@ -17,7 +17,7 @@ struct RootPage : RootPageT<RootPage> {
 
 	void InitializeComponent();
 
-	void Loaded(IInspectable const&, RoutedEventArgs const&);
+	void RootPage_Loaded(IInspectable const&, RoutedEventArgs const&);
 
 	void NavigationView_SelectionChanged(MUXC::NavigationView const&, MUXC::NavigationViewSelectionChangedEventArgs const& args);
 
@@ -58,14 +58,14 @@ private:
 
 	void _ProfileService_ProfileReordered(uint32_t profileIdx, bool isMoveUp);
 
-	::Magpie::EventRevoker _appThemeChangedRevoker;
-	::Magpie::EventRevoker _dpiChangedRevoker;
+	::Magpie::MultithreadEvent<bool>::EventRevoker _appThemeChangedRevoker;
+	::Magpie::Event<uint32_t>::EventRevoker _dpiChangedRevoker;
 
 	com_ptr<implementation::NewProfileViewModel> _newProfileViewModel = make_self<implementation::NewProfileViewModel>();
-	::Magpie::EventRevoker _profileAddedRevoker;
-	::Magpie::EventRevoker _profileRenamedRevoker;
-	::Magpie::EventRevoker _profileRemovedRevoker;
-	::Magpie::EventRevoker _profileMovedRevoker;
+	::Magpie::Event<::Magpie::Profile&>::EventRevoker _profileAddedRevoker;
+	::Magpie::Event<uint32_t>::EventRevoker _profileRenamedRevoker;
+	::Magpie::Event<uint32_t>::EventRevoker _profileRemovedRevoker;
+	::Magpie::Event<uint32_t, bool>::EventRevoker _profileMovedRevoker;
 };
 
 }

@@ -6,6 +6,7 @@
 #include "XamlHelper.h"
 #include "App.h"
 #include "MainWindow.h"
+#include "Win32Helper.h"
 
 using namespace winrt::Magpie::implementation;
 using namespace winrt;
@@ -30,7 +31,7 @@ void ToastService::Uninitialize() noexcept {
 		const DWORD threadId = GetThreadId(hToastThread);
 
 		// 持续尝试直到 _toastThread 创建了消息队列
-		while (!PostThreadMessage(threadId, CommonSharedConstants::WM_TOAST_QUIT, 0, 0)) {
+		while (!PostThreadMessage(threadId, WM_QUIT, 0, 0)) {
 			if (wil::handle_wait(hToastThread, 1)) {
 				break;
 			}
@@ -54,7 +55,7 @@ void ToastService::ShowMessageInApp(std::wstring_view title, std::wstring_view m
 
 void ToastService::_ToastThreadProc() noexcept {
 #ifdef _DEBUG
-	SetThreadDescription(GetCurrentThread(), L"Toast 线程");
+	SetThreadDescription(GetCurrentThread(), L"ToastService 线程");
 #endif
 
 	winrt::init_apartment(winrt::apartment_type::single_threaded);
@@ -108,22 +109,17 @@ void ToastService::_ToastThreadProc() noexcept {
 
 	MSG msg;
 	while (GetMessage(&msg, nullptr, 0, 0)) {
-		if (msg.message == CommonSharedConstants::WM_TOAST_QUIT) {
-			DestroyWindow(_hwndToast);
-			break;
-		}
-
-		{
-			BOOL processed = FALSE;
-			HRESULT hr = xamlSourceNative2->PreTranslateMessage(&msg, &processed);
-			if (SUCCEEDED(hr) && processed) {
-				continue;
-			}
+		BOOL processed = FALSE;
+		HRESULT hr = xamlSourceNative2->PreTranslateMessage(&msg, &processed);
+		if (SUCCEEDED(hr) && processed) {
+			continue;
 		}
 
 		TranslateMessage(&msg);
 		DispatchMessage(&msg);
 	}
+
+	DestroyWindow(_hwndToast);
 
 	// 防止退出时崩溃
 	_toastPage->Close();
@@ -133,16 +129,27 @@ void ToastService::_ToastThreadProc() noexcept {
 	xamlSource.Close();
 	_dispatcher = nullptr;
 	
-	// 关闭 DesktopWindowXamlSource 后应清空消息队列
+	// 关闭 DesktopWindowXamlSource 后应清空消息队列以减少 ToastPage 的引用，但不能
+	// 防止泄露
 	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
 		DispatchMessage(&msg);
 	}
 
-	// !!! HACK !!!
-	// Win10 中 ToastPage 会泄露，很可能是 XAML Islands 的 bug，但主线程的 RootPage 却不会。
-	// Win11 没有这个问题。下面的代码确保 ToastPage 能析构！
-	auto raw = _toastPage.detach();
-	while (raw->Release() != 0) {}
+	// 偶尔清空消息队列无用，需要再清空一次，不确定是否 100% 可靠。谢谢你，XAML Islands！
+	Sleep(0);
+	while (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE)) {
+		DispatchMessage(&msg);
+	}
+
+	if (Win32Helper::GetOSVersion().IsWin11()) {
+		_toastPage = nullptr;
+	} else {
+		// !!! HACK !!!
+		// Win10 中 ToastPage 会泄露，很可能是 XAML Islands 的 bug，但主线程的 RootPage 却不会。
+		// Win11 没有这个问题。下面的代码确保 ToastPage 能析构！
+		auto raw = _toastPage.detach();
+		while (raw->Release() != 0) {}
+	}
 }
 
 LRESULT ToastService::_ToastWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
