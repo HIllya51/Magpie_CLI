@@ -121,7 +121,7 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json &config, int p
     if (profile["frameRateLimiterEnabled"])
     {
         options.maxFrameRate = profile["maxFrameRate"];
-        options.minFrameRate = std::min(profile["minFrameRate"], *options.maxFrameRate);
+        options.minFrameRate = std::min((float)profile["minFrameRate"], *options.maxFrameRate);
     }
     else
     {
