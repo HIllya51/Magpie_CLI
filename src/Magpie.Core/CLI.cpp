@@ -121,11 +121,11 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json &config, int p
     if (profile["frameRateLimiterEnabled"])
     {
         options.maxFrameRate = profile["maxFrameRate"];
-        options.minFrameRate = std::min((float)profile["minFrameRate"], *options.maxFrameRate);
+        options.minFrameRate = std::min((float)config["minFrameRate"], *options.maxFrameRate);
     }
     else
     {
-        options.minFrameRate = profile["minFrameRate"];
+        options.minFrameRate = config["minFrameRate"];
     }
     options.multiMonitorUsage = profile["multiMonitorUsage"];
     options.cursorInterpolationMode = profile["cursorInterpolationMode"];
