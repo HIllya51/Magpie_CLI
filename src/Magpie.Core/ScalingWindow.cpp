@@ -246,6 +246,8 @@ ScalingError ScalingWindow::Create(
 		wcex.lpfnWndProc = [](HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam) {
 			return DefWindowProc(hWnd, msg, wParam, lParam);
 		};
+		wcex.lpfnWndProc = DefWindowProc;
+		GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)DefWindowProc, &wcex.hInstance);
 		wcex.lpszClassName = CommonSharedConstants::SWAP_CHAIN_CHILD_WINDOW_CLASS_NAME;
 		RegisterClassEx(&wcex);
 
@@ -307,6 +309,9 @@ ScalingError ScalingWindow::Create(
 		} else {
 			// 由于上边框的存在，交换链应使用子窗口。WS_EX_LAYERED | WS_EX_TRANSPARENT 使鼠标
 			// 穿透子窗口，参见 https://learn.microsoft.com/en-us/windows/win32/winmsg/window-features#layered-windows
+				
+			HINSTANCE hinst;
+			GetModuleHandleEx(GET_MODULE_HANDLE_EX_FLAG_FROM_ADDRESS, (LPCWSTR)DefWindowProc, &hinst);
 			hwndSwapChain = CreateWindowEx(
 				WS_EX_NOREDIRECTIONBITMAP | WS_EX_LAYERED | WS_EX_TRANSPARENT,
 				CommonSharedConstants::SWAP_CHAIN_CHILD_WINDOW_CLASS_NAME,
@@ -318,7 +323,8 @@ ScalingError ScalingWindow::Create(
 				_swapChainRect.bottom - _swapChainRect.top,
 				Handle(),
 				NULL,
-				wil::GetModuleInstanceHandle(),
+				hinst,
+				//wil::GetModuleInstanceHandle(),
 				nullptr
 			);
 		}
