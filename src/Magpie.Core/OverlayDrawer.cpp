@@ -223,12 +223,15 @@ void OverlayDrawer::UpdateAfterActiveEffectsChanged() noexcept {
 }
 
 static const std::wstring& GetAppLanguage() noexcept {
-	static std::wstring language;
+	static std::wstring language;		
+	language=L"en-us";
+#if 0
 	if (language.empty()) {
 		winrt::ResourceContext resourceContext = winrt::ResourceContext::GetForViewIndependentUse();
 		language = resourceContext.QualifierValues().Lookup(L"Language");
 		StrHelper::ToLowerCase(language);
 	}
+#endif
 	return language;
 }
 
