@@ -12,80 +12,7 @@
 #include "BackendDescriptorStore.h"
 #include "EffectsProfiler.h"
 
-#pragma push_macro("_UNICODE")
-// Conan 的 muparser 不含 UNICODE 支持
-#undef _UNICODE
-#pragma warning(push)
-#pragma warning(disable: 4310)	// 类型强制转换截断常量值
-#include <muParser.h>
-#pragma warning(push)
-#pragma pop_macro("_UNICODE")
-
 namespace Magpie {
-
-static SIZE CalcOutputSize(
-	const std::pair<std::string, std::string>& outputSizeExpr,
-	const EffectOption& option,
-	bool treatFitAsFill,
-	SIZE rendererSize,
-	SIZE inputSize,
-	mu::Parser& exprParser
-) noexcept {
-	SIZE outputSize{};
-
-	if (outputSizeExpr.first.empty()) {
-		switch (option.scalingType) {
-		case ScalingType::Normal:
-		{
-			outputSize.cx = std::lroundf(inputSize.cx * option.scale.first);
-			outputSize.cy = std::lroundf(inputSize.cy * option.scale.second);
-			break;
-		}
-		case ScalingType::Absolute:
-		{
-			outputSize.cx = std::lroundf(option.scale.first);
-			outputSize.cy = std::lroundf(option.scale.second);
-			break;
-		}
-		case ScalingType::Fit:
-		{
-			if (!treatFitAsFill) {
-				const float fillScale = std::min(
-					float(rendererSize.cx) / inputSize.cx,
-					float(rendererSize.cy) / inputSize.cy
-				);
-				outputSize.cx = std::lroundf(inputSize.cx * fillScale * option.scale.first);
-				outputSize.cy = std::lroundf(inputSize.cy * fillScale * option.scale.second);
-				break;
-			}
-			[[fallthrough]];
-		}
-		case ScalingType::Fill:
-		{
-			outputSize = rendererSize;
-			break;
-		}
-		default:
-			assert(false);
-			break;
-		}
-	} else {
-		assert(!outputSizeExpr.second.empty());
-
-		try {
-			exprParser.SetExpr(outputSizeExpr.first);
-			outputSize.cx = std::lround(exprParser.Eval());
-
-			exprParser.SetExpr(outputSizeExpr.second);
-			outputSize.cy = std::lround(exprParser.Eval());
-		} catch (const mu::ParserError& e) {
-			Logger::Get().Error(fmt::format("计算输出尺寸 {} 失败: {}", e.GetExpr(), e.GetMsg()));
-			return {};
-		}
-	}
-
-	return outputSize;
-}
 
 EffectDrawer::~EffectDrawer() {
 	// [0] 为输入，由前一个 EffectDrawer 管理
@@ -98,7 +25,6 @@ EffectDrawer::~EffectDrawer() {
 bool EffectDrawer::Initialize(
 	const EffectDesc& desc,
 	const EffectOption& option,
-	bool treatFitAsFill,
 	DeviceResources& deviceResources,
 	BackendDescriptorStore& descriptorStore,
 	ID3D11Texture2D** inOutTexture
@@ -113,20 +39,11 @@ bool EffectDrawer::Initialize(
 		inputSize = { (LONG)inputDesc.Width, (LONG)inputDesc.Height };
 	}
 
-	static mu::Parser exprParser;
-	exprParser.DefineConst("INPUT_WIDTH", inputSize.cx);
-	exprParser.DefineConst("INPUT_HEIGHT", inputSize.cy);
-
-	const SIZE rendererRect = Win32Helper::GetSizeOfRect(ScalingWindow::Get().RendererRect());
-	const SIZE outputSize = CalcOutputSize(
-		desc.GetOutputSizeExpr(), option, treatFitAsFill, rendererRect, inputSize, exprParser);
+	const SIZE outputSize = _CalcOutputSize(desc, option, inputSize);
 	if (outputSize.cx <= 0 || outputSize.cy <= 0) {
 		Logger::Get().Error("非法的输出尺寸");
 		return false;
 	}
-
-	exprParser.DefineConst("OUTPUT_WIDTH", outputSize.cx);
-	exprParser.DefineConst("OUTPUT_HEIGHT", outputSize.cy);
 
 	_samplers.resize(desc.samplers.size());
 	for (UINT i = 0; i < _samplers.size(); ++i) {
@@ -190,10 +107,10 @@ bool EffectDrawer::Initialize(
 		} else {
 			SIZE texSize{};
 			try {
-				exprParser.SetExpr(texDesc.sizeExpr.first);
-				texSize.cx = std::lround(exprParser.Eval());
-				exprParser.SetExpr(texDesc.sizeExpr.second);
-				texSize.cy = std::lround(exprParser.Eval());
+				_exprParser.SetExpr(texDesc.sizeExpr.first);
+				texSize.cx = std::lround(_exprParser.Eval());
+				_exprParser.SetExpr(texDesc.sizeExpr.second);
+				texSize.cy = std::lround(_exprParser.Eval());
 			} catch (const mu::ParserError& e) {
 				Logger::Get().Error(fmt::format("计算中间纹理尺寸 {} 失败: {}", e.GetExpr(), e.GetMsg()));
 				return false;
@@ -271,7 +188,6 @@ void EffectDrawer::DrawForExport(const EffectDesc& desc, uint32_t passIdx) const
 bool EffectDrawer::ResizeTextures(
 	const EffectDesc& desc,
 	const EffectOption& option,
-	bool treatFitAsFill,
 	DeviceResources& deviceResources,
 	ID3D11Texture2D** inOutTexture
 ) noexcept {
@@ -289,54 +205,35 @@ bool EffectDrawer::ResizeTextures(
 		inputSize = { (LONG)inputDesc.Width, (LONG)inputDesc.Height };
 	}
 
-	static mu::Parser exprParser;
-	exprParser.DefineConst("INPUT_WIDTH", inputSize.cx);
-	exprParser.DefineConst("INPUT_HEIGHT", inputSize.cy);
+	const SIZE outputSize = _CalcOutputSize(desc, option, inputSize);
+	if (outputSize.cx <= 0 || outputSize.cy <= 0) {
+		Logger::Get().Error("非法的输出尺寸");
+		return false;
+	}
+	
+	D3D11_TEXTURE2D_DESC texDesc;
+	_textures[1]->GetDesc(&texDesc);
 
-	SIZE outputSize;
-	if (desc.GetOutputSizeExpr().first.empty()) {
-		const SIZE swapChainSize = Win32Helper::GetSizeOfRect(ScalingWindow::Get().RendererRect());
-		outputSize = CalcOutputSize(
-			desc.GetOutputSizeExpr(), option, treatFitAsFill, swapChainSize, inputSize, exprParser);
-		if (outputSize.cx <= 0 || outputSize.cy <= 0) {
-			Logger::Get().Error("非法的输出尺寸");
+	if ((LONG)texDesc.Width != outputSize.cx || (LONG)texDesc.Height != outputSize.cy) {
+		_descriptorStore->RemoveCache(_textures[1].get());
+
+		_textures[1] = DirectXHelper::CreateTexture2D(
+			deviceResources.GetD3DDevice(),
+			texDesc.Format,
+			outputSize.cx,
+			outputSize.cy,
+			texDesc.BindFlags
+		);
+
+		if (!_textures[1]) {
+			Logger::Get().Error("创建输出纹理失败");
 			return false;
 		}
 
-		D3D11_TEXTURE2D_DESC texdesc;
-		_textures[1]->GetDesc(&texdesc);
-
-		if ((LONG)texdesc.Width != outputSize.cx || (LONG)texdesc.Height != outputSize.cy) {
-			_descriptorStore->RemoveCache(_textures[1].get());
-
-			_textures[1] = DirectXHelper::CreateTexture2D(
-				deviceResources.GetD3DDevice(),
-				texdesc.Format,
-				outputSize.cx,
-				outputSize.cy,
-				texdesc.BindFlags
-			);
-
-			if (!_textures[1]) {
-				Logger::Get().Error("创建输出纹理失败");
-				return false;
-			}
-
-			anyChange = true;
-		}
-	} else {
-		// 输出尺寸表达式不为空则只和输入尺寸有关
-		D3D11_TEXTURE2D_DESC texdesc;
-		_textures[1]->GetDesc(&texdesc);
-
-		outputSize.cx = texdesc.Width;
-		outputSize.cy = texdesc.Height;
+		anyChange = true;
 	}
 
 	*inOutTexture = _textures[1].get();
-
-	exprParser.DefineConst("OUTPUT_WIDTH", outputSize.cx);
-	exprParser.DefineConst("OUTPUT_HEIGHT", outputSize.cy);
 
 	for (size_t i = 2; i < _textures.size(); ++i) {
 		const std::pair<std::string, std::string>& sizeExpr = desc.textures[i].sizeExpr;
@@ -347,10 +244,10 @@ bool EffectDrawer::ResizeTextures(
 
 		SIZE texSize{};
 		try {
-			exprParser.SetExpr(sizeExpr.first);
-			texSize.cx = std::lround(exprParser.Eval());
-			exprParser.SetExpr(sizeExpr.second);
-			texSize.cy = std::lround(exprParser.Eval());
+			_exprParser.SetExpr(sizeExpr.first);
+			texSize.cx = std::lround(_exprParser.Eval());
+			_exprParser.SetExpr(sizeExpr.second);
+			texSize.cy = std::lround(_exprParser.Eval());
 		} catch (const mu::ParserError& e) {
 			Logger::Get().Error(fmt::format("计算中间纹理尺寸 {} 失败: {}", e.GetExpr(), e.GetMsg()));
 			return false;
@@ -361,18 +258,17 @@ bool EffectDrawer::ResizeTextures(
 			return false;
 		}
 
-		D3D11_TEXTURE2D_DESC texdesc;
-		_textures[i]->GetDesc(&texdesc);
+		_textures[i]->GetDesc(&texDesc);
 
-		if ((LONG)texdesc.Width != texSize.cx || (LONG)texdesc.Height != texSize.cy) {
+		if ((LONG)texDesc.Width != texSize.cx || (LONG)texDesc.Height != texSize.cy) {
 			_descriptorStore->RemoveCache(_textures[i].get());
 
 			_textures[i] = DirectXHelper::CreateTexture2D(
 				deviceResources.GetD3DDevice(),
-				texdesc.Format,
+				texDesc.Format,
 				texSize.cx,
 				texSize.cy,
-				texdesc.BindFlags
+				texDesc.BindFlags
 			);
 
 			if (!_textures[i]) {
@@ -399,6 +295,83 @@ bool EffectDrawer::ResizeTextures(
 	}
 
 	return true;
+}
+
+SIZE EffectDrawer::_CalcOutputSize(
+	const EffectDesc& desc,
+	const EffectOption& option,
+	SIZE inputSize
+) const noexcept {
+	_exprParser.DefineConst("INPUT_WIDTH", inputSize.cx);
+	_exprParser.DefineConst("INPUT_HEIGHT", inputSize.cy);
+
+	SIZE outputSize{};
+	const std::pair<std::string, std::string>& outputSizeExpr = desc.GetOutputSizeExpr();
+
+	if (outputSizeExpr.first.empty()) {
+		const SIZE rendererSize = Win32Helper::GetSizeOfRect(ScalingWindow::Get().RendererRect());
+
+		switch (option.scalingType) {
+		case ScalingType::Normal:
+		{
+			outputSize.cx = std::lroundf(inputSize.cx * option.scale.first);
+			outputSize.cy = std::lroundf(inputSize.cy * option.scale.second);
+			break;
+		}
+		case ScalingType::Absolute:
+		{
+			outputSize.cx = std::lroundf(option.scale.first);
+			outputSize.cy = std::lroundf(option.scale.second);
+			break;
+		}
+		case ScalingType::Fit:
+		{
+			// 窗口模式缩放时将缩放比例为 1 的 Fit 视为 Fill。此时缩放确保是等比例的，但由于舍入
+			// 可能存在一个像素的误差。考虑长 100 高 50 的矩形窗口，长调整到 101 时高将四舍五入到
+			// 51，再将长调整到 102 高仍是 51，Fit 的计算方式会使这两次调整中有一次存在黑边，而且
+			// 也会影响后续计算是否追加 Bicubic。
+			const bool treatFitAsFill = ScalingWindow::Get().Options().IsWindowedMode() &&
+				IsApprox(option.scale.first, 1.0f) && IsApprox(option.scale.second, 1.0f);
+
+			if (!treatFitAsFill) {
+				const float fillScale = std::min(
+					float(rendererSize.cx) / inputSize.cx,
+					float(rendererSize.cy) / inputSize.cy
+				);
+				outputSize.cx = std::lroundf(inputSize.cx * fillScale * option.scale.first);
+				outputSize.cy = std::lroundf(inputSize.cy * fillScale * option.scale.second);
+				break;
+			}
+			[[fallthrough]];
+		}
+		case ScalingType::Fill:
+		{
+			outputSize = rendererSize;
+			break;
+		}
+		default:
+			assert(false);
+			return {};
+		}
+	} else {
+		assert(!outputSizeExpr.second.empty());
+
+		try {
+			_exprParser.SetExpr(outputSizeExpr.first);
+			outputSize.cx = std::lround(_exprParser.Eval());
+
+			_exprParser.SetExpr(outputSizeExpr.second);
+			outputSize.cy = std::lround(_exprParser.Eval());
+		} catch (const mu::ParserError& e) {
+			Logger::Get().Error(fmt::format("计算输出尺寸 {} 失败: {}", e.GetExpr(), e.GetMsg()));
+			return {};
+		}
+	}
+
+	_exprParser.DefineConst("OUTPUT_WIDTH", outputSize.cx);
+	_exprParser.DefineConst("OUTPUT_HEIGHT", outputSize.cy);
+
+	return outputSize;
 }
 
 bool EffectDrawer::_UpdatePassResources(const EffectDesc& desc) noexcept {
@@ -532,18 +505,25 @@ bool EffectDrawer::_UpdateConstants(
 		}
 	}
 
-	D3D11_BUFFER_DESC bd{
-		.ByteWidth = 4 * (UINT)constants.size(),
-		.Usage = D3D11_USAGE_DEFAULT,
-		.BindFlags = D3D11_BIND_CONSTANT_BUFFER
-	};
+	if (_constantBuffer) {
+		// 更新缓冲区
+		deviceResources.GetD3DDC()->UpdateSubresource1(
+			_constantBuffer.get(), 0, nullptr, constants.data(), 0, 0, D3D11_COPY_DISCARD);
+	} else {
+		// 创建缓冲区
+		D3D11_BUFFER_DESC bd{
+			.ByteWidth = 4 * (UINT)constants.size(),
+			.Usage = D3D11_USAGE_DEFAULT,
+			.BindFlags = D3D11_BIND_CONSTANT_BUFFER
+		};
 
-	D3D11_SUBRESOURCE_DATA initData{ .pSysMem = constants.data() };
+		D3D11_SUBRESOURCE_DATA initData{ .pSysMem = constants.data() };
 
-	HRESULT hr = deviceResources.GetD3DDevice()->CreateBuffer(&bd, &initData, _constantBuffer.put());
-	if (FAILED(hr)) {
-		Logger::Get().ComError("CreateBuffer 失败", hr);
-		return false;
+		HRESULT hr = deviceResources.GetD3DDevice()->CreateBuffer(&bd, &initData, _constantBuffer.put());
+		if (FAILED(hr)) {
+			Logger::Get().ComError("CreateBuffer 失败", hr);
+			return false;
+		}
 	}
 
 	return true;

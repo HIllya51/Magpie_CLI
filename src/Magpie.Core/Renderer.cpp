@@ -120,6 +120,10 @@ ScalingError Renderer::Initialize(HWND hwndAttach, OverlayOptions& overlayOption
 
 	_UpdateDestRect();
 
+	Logger::Get().Info(fmt::format("目标矩形: {},{},{},{} ({}x{})",
+		_destRect.left, _destRect.top, _destRect.right, _destRect.bottom,
+		_destRect.right - _destRect.left, _destRect.bottom - _destRect.top));
+
 	if (!_cursorDrawer.Initialize(_frontendResources)) {
 		Logger::Get().ComError("初始化 CursorDrawer 失败", hr);
 		return ScalingError::ScalingFailedGeneral;
@@ -194,7 +198,7 @@ winrt::fire_and_forget Renderer::TakeScreenshot(
 	}
 }
 
-void Renderer::_FrontendRender() noexcept {
+void Renderer::_FrontendRender(bool waitForRenderComplete) noexcept {
 	winrt::com_ptr<ID3D11Texture2D> frameTex;
 	winrt::com_ptr<ID3D11RenderTargetView> frameRtv;
 	POINT drawOffset;
@@ -262,10 +266,10 @@ void Renderer::_FrontendRender() noexcept {
 	// 绘制光标
 	_cursorDrawer.Draw(frameTex.get(), drawOffset);
 	
-	_presenter->EndFrame();
+	_presenter->EndFrame(waitForRenderComplete);
 }
 
-bool Renderer::Render(bool force) noexcept {
+bool Renderer::Render(bool force, bool waitForRenderComplete) noexcept {
 	if (!force && _lastAccessMutexKey == _sharedTextureMutexKey.load(std::memory_order_relaxed)) {
 		if (_lastAccessMutexKey == 0) {
 			// 第一帧尚未完成
@@ -277,7 +281,7 @@ bool Renderer::Render(bool force) noexcept {
 		}
 	}
 
-	_FrontendRender();
+	_FrontendRender(waitForRenderComplete);
 	return true;
 }
 
@@ -424,18 +428,6 @@ bool Renderer::_InitFrameSource() noexcept {
 	return true;
 }
 
-// 单位为微秒
-template <typename Fn>
-static int Measure(const Fn& func) noexcept {
-	using namespace std::chrono;
-
-	auto t = steady_clock::now();
-	func();
-	auto dura = duration_cast<microseconds>(steady_clock::now() - t);
-
-	return int(dura.count());
-}
-
 static std::optional<EffectDesc> CompileEffect(
 	const EffectOption& effectOption,
 	bool noFP16,
@@ -463,7 +455,7 @@ static std::optional<EffectDesc> CompileEffect(
 	}
 
 	bool success = true;
-	int duration = Measure([&]() {
+	uint32_t duration = Measure([&]() {
 		success = !EffectCompiler::Compile(result, compileFlag, &effectOption.parameters);
 	});
 
@@ -516,11 +508,9 @@ ID3D11Texture2D* Renderer::_BuildEffects() noexcept {
 
 	ID3D11Texture2D* inOutTexture = _frameSource->GetOutput();
 	for (uint32_t i = 0; i < effectCount; ++i) {
-		// 窗口模式缩放时最后一个效果如果支持缩放则将 Fit 视为 Fill
 		if (!_effectDrawers[i].Initialize(
 			_effectDescs[i],
 			effects[i],
-			options.IsWindowedMode() && i == effectCount - 1,
 			_backendResources,
 			_backendDescriptorStore,
 			&inOutTexture
@@ -628,7 +618,6 @@ bool Renderer::_AppendBicubic(ID3D11Texture2D** inOutTexture) noexcept {
 	if (!bicubicDrawer.Initialize(
 		bicubicDesc,
 		bicubicOption,
-		false,
 		_backendResources,
 		_backendDescriptorStore,
 		inOutTexture
@@ -648,11 +637,9 @@ ID3D11Texture2D* Renderer::_ResizeEffects() noexcept {
 
 	ID3D11Texture2D* inOutTexture = _frameSource->GetOutput();
 	for (uint32_t i = 0; i < effectCount; ++i) {
-		// 窗口模式缩放时最后一个效果如果支持缩放则将 Fit 视为 Fill
 		if (!_effectDrawers[i].ResizeTextures(
 			_effectDescs[i],
 			effects[i],
-			options.IsWindowedMode() && i == effectCount - 1,
 			_backendResources,
 			&inOutTexture
 		)) {
@@ -677,7 +664,6 @@ ID3D11Texture2D* Renderer::_ResizeEffects() noexcept {
 			if (!_effectDrawers.back().ResizeTextures(
 				bicubicDesc,
 				bicubicOption,
-				false,
 				_backendResources,
 				&inOutTexture
 			)) {
@@ -764,7 +750,10 @@ void Renderer::_BackendThreadProc() noexcept {
 
 	winrt::init_apartment(winrt::apartment_type::single_threaded);
 
-	if (ID3D11Texture2D* outputTexture = _InitBackend(); !outputTexture) {
+	if (const HANDLE sharedHandle = _InitBackend()) {
+		_sharedTextureHandle.store(sharedHandle, std::memory_order_release);
+		_sharedTextureHandle.notify_one();
+	} else {
 		_frameSource.reset();
 		// 通知前端初始化失败
 		_sharedTextureHandle.store(INVALID_HANDLE_VALUE, std::memory_order_release);
@@ -841,7 +830,7 @@ void Renderer::_BackendThreadProc() noexcept {
 	}
 }
 
-ID3D11Texture2D* Renderer::_InitBackend() noexcept {
+HANDLE Renderer::_InitBackend() noexcept {
 	// 创建 DispatcherQueue
 	{
 		winrt::Windows::System::DispatcherQueueController dqc{ nullptr };
@@ -854,21 +843,21 @@ ID3D11Texture2D* Renderer::_InitBackend() noexcept {
 		);
 		if (FAILED(hr)) {
 			Logger::Get().ComError("CreateDispatcherQueueController 失败", hr);
-			return nullptr;
+			return NULL;
 		}
 
 		_backendThreadDispatcher = dqc.DispatcherQueue();
 	}
 
 	if (!_backendResources.Initialize(false)) {
-		return nullptr;
+		return NULL;
 	}
 	
 	ID3D11Device5* d3dDevice = _backendResources.GetD3DDevice();
 	_backendDescriptorStore.Initialize(d3dDevice);
 
 	if (!_InitFrameSource()) {
-		return nullptr;
+		return NULL;
 	}
 
 	{
@@ -906,7 +895,7 @@ ID3D11Texture2D* Renderer::_InitBackend() noexcept {
 
 	ID3D11Texture2D* outputTexture = _BuildEffects();
 	if (!outputTexture) {
-		return nullptr;
+		return NULL;
 	}
 
 	HRESULT hr = d3dDevice->CreateFence(
@@ -917,24 +906,27 @@ ID3D11Texture2D* Renderer::_InitBackend() noexcept {
 		// 和 ID3D12Device::CreateFence 等价，但支持 DX12 的显卡也有失败的可能，如 GH#1013
 		Logger::Get().ComError("CreateFence 失败", hr);
 		_backendInitError = ScalingError::CreateFenceFailed;
-		return nullptr;
+		return NULL;
 	}
 
 	if (!_fenceEvent.try_create(wil::EventOptions::None, nullptr)) {
 		Logger::Get().Win32Error("CreateEvent 失败");
-		return nullptr;
+		return NULL;
 	}
 
 	HANDLE sharedHandle = _CreateSharedTexture(outputTexture);
 	if (!sharedHandle) {
-		Logger::Get().Win32Error("_CreateSharedTexture 失败");
-		return nullptr;
+		Logger::Get().Error("_CreateSharedTexture 失败");
+		return NULL;
 	}
-	
-	_sharedTextureHandle.store(sharedHandle, std::memory_order_release);
-	_sharedTextureHandle.notify_one();
 
-	return outputTexture;
+	// 最后启动捕获以尽可能推迟显示黄色边框 (Win10) 或禁用圆角 (Win11)
+	if (!_frameSource->Start()) {
+		Logger::Get().Error("启动捕获失败");
+		return NULL;
+	}
+
+	return sharedHandle;
 }
 
 void Renderer::_BackendRender(ID3D11Texture2D* effectsOutput) noexcept {

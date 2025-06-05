@@ -5,6 +5,7 @@
 #endif
 #include "ControlHelper.h"
 #include "Profile.h"
+#include "App.h"
 
 using namespace ::Magpie;
 using namespace winrt;
@@ -26,14 +27,29 @@ void ProfilePage::NumberBox_Loaded(IInspectable const& sender, RoutedEventArgs c
 	ControlHelper::NumberBox_Loaded(sender);
 }
 
+void ProfilePage::InitialWindowedScaleFactorComboBox_SelectionChanged(IInspectable const&, SelectionChangedEventArgs const&) {
+	if ((InitialWindowedScaleFactor)_viewModel->InitialWindowedScaleFactor() == InitialWindowedScaleFactor::Custom) {
+		InitialWindowedScaleFactorComboBox().MinWidth(0);
+		CustomInitialWindowedScaleFactorNumberBox().Visibility(Visibility::Visible);
+		CustomInitialWindowedScaleFactorLabel().Visibility(Visibility::Visible);
+	} else {
+		const double minWidth = App::Get().Resources()
+			.Lookup(box_value(L"SettingsCardContentMinWidth"))
+			.as<double>();
+		InitialWindowedScaleFactorComboBox().MinWidth(minWidth);
+		CustomInitialWindowedScaleFactorNumberBox().Visibility(Visibility::Collapsed);
+		CustomInitialWindowedScaleFactorLabel().Visibility(Visibility::Collapsed);
+	}
+}
+
 void ProfilePage::CursorScalingComboBox_SelectionChanged(IInspectable const&, SelectionChangedEventArgs const&) {
 	if ((CursorScaling)_viewModel->CursorScaling() == CursorScaling::Custom) {
 		CursorScalingComboBox().MinWidth(0);
 		CustomCursorScalingNumberBox().Visibility(Visibility::Visible);
 		CustomCursorScalingLabel().Visibility(Visibility::Visible);
 	} else {
-		double minWidth = Application::Current().Resources()
-			.Lookup(box_value(L"SettingBoxMinWidth"))
+		const double minWidth = App::Get().Resources()
+			.Lookup(box_value(L"SettingsCardContentMinWidth"))
 			.as<double>();
 		CursorScalingComboBox().MinWidth(minWidth);
 		CustomCursorScalingNumberBox().Visibility(Visibility::Collapsed);

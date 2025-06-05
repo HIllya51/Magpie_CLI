@@ -10,9 +10,9 @@ public:
 
 	~CursorManager() noexcept;
 
-	void Initialize() noexcept;
-
 	void Update() noexcept;
+
+	void UpdateAfterScalingWindowPosChanged() noexcept;
 
 	// 光标不在缩放窗口上或隐藏时为 NULL
 	HCURSOR CursorHandle() const noexcept {
@@ -50,6 +50,8 @@ private:
 	void _ShowSystemCursor(bool show, bool onDestory = false);
 
 	void _AdjustCursorSpeed() noexcept;
+
+	void _ReliableSetCursorPos(POINT pos) const noexcept;
 
 	void _UpdateCursorClip() noexcept;
 

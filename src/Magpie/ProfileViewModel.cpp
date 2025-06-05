@@ -417,11 +417,46 @@ void ProfileViewModel::MultiMonitorUsage(int value) {
 	RaisePropertyChanged(L"MultiMonitorUsage");
 }
 
+int ProfileViewModel::InitialWindowedScaleFactor() const noexcept {
+	return (int)_data->initialWindowedScaleFactor;
+}
+
+void ProfileViewModel::InitialWindowedScaleFactor(int value) {
+	if (value < 0) {
+		return;
+	}
+
+	::Magpie::InitialWindowedScaleFactor factor = (::Magpie::InitialWindowedScaleFactor)value;
+	if (_data->initialWindowedScaleFactor == factor) {
+		return;
+	}
+
+	_data->initialWindowedScaleFactor = factor;
+	AppSettings::Get().SaveAsync();
+
+	RaisePropertyChanged(L"InitialWindowedScaleFactor");
+}
+
+double ProfileViewModel::CustomInitialWindowedScaleFactor() const noexcept {
+	return _data->customInitialWindowedScaleFactor;
+}
+
+void ProfileViewModel::CustomInitialWindowedScaleFactor(double value) {
+	if (_data->customInitialWindowedScaleFactor == value) {
+		return;
+	}
+
+	_data->customInitialWindowedScaleFactor = std::isnan(value) ? 1.0f : (float)value;
+	AppSettings::Get().SaveAsync();
+
+	RaisePropertyChanged(L"CustomInitialWindowedScaleFactor");
+}
+
 IVector<IInspectable> ProfileViewModel::GraphicsCards() const noexcept {
 	std::vector<IInspectable> graphicsCards;
 
-	const std::vector<AdapterInfo>& adapterInfos = AdaptersService::Get().AdapterInfos();
-	if (!adapterInfos.empty()) {
+	if (IsShowGraphicsCardSettingsCard()) {
+		const std::vector<AdapterInfo>& adapterInfos = AdaptersService::Get().AdapterInfos();
 		graphicsCards.reserve(adapterInfos.size() + 1);
 
 		ResourceLoader resourceLoader =

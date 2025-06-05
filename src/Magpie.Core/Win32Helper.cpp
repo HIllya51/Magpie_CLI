@@ -139,7 +139,7 @@ bool Win32Helper::GetWindowFrameRect(HWND hWnd, RECT& rect) noexcept {
 		// 一个屏幕上。
 		// 注意 Win11 中最大化窗口的 extended frame bounds 包含了下边框，但对我们
 		// 没有影响，因为缩放时下边框始终会被裁剪掉。
-		IntersectRect(&rect, &rect, &mi.rcMonitor);
+		Win32Helper::IntersectRect(rect, rect, mi.rcMonitor);
 	}
 
 	// 对于使用 SetWindowRgn 自定义形状的窗口，裁剪到最小矩形边框
@@ -153,9 +153,9 @@ bool Win32Helper::GetWindowFrameRect(HWND hWnd, RECT& rect) noexcept {
 		}
 
 		// 转换为屏幕坐标
-		OffsetRect(&rgnRect, windowRect.left, windowRect.top);
+		OffsetRect(rgnRect, windowRect.left, windowRect.top);
 
-		IntersectRect(&rect, &rect, &rgnRect);
+		Win32Helper::IntersectRect(rect, rect, rgnRect);
 	}
 
 	return true;
@@ -169,6 +169,105 @@ uint32_t Win32Helper::GetNativeWindowBorderThickness(uint32_t dpi) noexcept {
 		return (dpi + USER_DEFAULT_SCREEN_DPI / 2) / USER_DEFAULT_SCREEN_DPI;
 	} else {
 		return 1;
+	}
+}
+
+int16_t Win32Helper::AdvancedWindowHitTest(HWND hWnd, POINT ptScreen, HWND* hwndInvolve) noexcept {
+	HWND hwndCur = hWnd;
+	int16_t hittest = HTNOWHERE;
+	while (true) {
+		// ChildWindowFromPointEx 不检查命中测试，稍后手动检查
+		POINT ptClient = ptScreen;
+		ScreenToClient(hwndCur, &ptClient);
+		const HWND hwndChild = ChildWindowFromPointEx(hwndCur, ptClient,
+			CWP_SKIPINVISIBLE | CWP_SKIPDISABLED | CWP_SKIPTRANSPARENT);
+		if (!hwndChild || hwndChild == hwndCur) {
+			break;
+		}
+
+		DWORD_PTR area = HTNOWHERE;
+		SendMessageTimeout(hwndChild, WM_NCHITTEST, 0, MAKELPARAM(ptScreen.x, ptScreen.y),
+			SMTO_NORMAL, 10, &area);
+		if (area != HTTRANSPARENT) {
+			hwndCur = hwndChild;
+			hittest = (int16_t)area;
+			continue;
+		}
+
+		// 必须遍历子窗口手动执行命中测试。这个路径较慢，但基本没机会执行。已知
+		// Office 2021 会触发此路径。
+		struct EnumData {
+			HWND hwndChild;
+			POINT ptScreen;
+			int16_t& hittest;
+		} data{ NULL, ptScreen, hittest };
+
+		EnumChildWindows(hwndCur, [](HWND hWnd, LPARAM lParam) {
+			// 跳过不可见和被禁用的窗口
+			if (!IsWindowVisible(hWnd) || !IsWindowEnabled(hWnd)) {
+				return TRUE;
+			}
+
+			EnumData* data = (EnumData*)lParam;
+
+			// 检查是否在窗口内
+			RECT windowRect;
+			if (!GetWindowRect(hWnd, &windowRect) || !PtInRect(&windowRect, data->ptScreen)) {
+				return TRUE;
+			}
+
+			// 检查窗口是否对鼠标透明
+			if (GetWindowExStyle(hWnd) & WS_EX_TRANSPARENT) {
+				return TRUE;
+			}
+
+			// 使用 ChildWindowFromPointEx 检查分层窗口和自定义形状，见 PtInWindow
+			SetLastError(0);
+			POINT ptClient = data->ptScreen;
+			ScreenToClient(hWnd, &ptClient);
+			if (!ChildWindowFromPointEx(hWnd, ptClient,
+				CWP_SKIPINVISIBLE | CWP_SKIPDISABLED | CWP_SKIPTRANSPARENT
+			)) {
+				// 如果因权限不足等原因失败则视为不透明
+				if (GetLastError() == 0) {
+					// 命中了透明像素
+					return TRUE;
+				}
+			}
+
+			// 检查命中测试是否透明。这是我们不得不遍历子窗口的原因：ChildWindowFromPoint 的所有
+			// 变体都不支持检查命中测试。（RealChildWindowFromPoint 只检查标准控件，因此也无用。）
+			DWORD_PTR area = HTNOWHERE;
+			SendMessageTimeout(hWnd, WM_NCHITTEST, 0,
+				MAKELPARAM(data->ptScreen.x, data->ptScreen.y), SMTO_NORMAL, 10, &area);
+			if (area == HTTRANSPARENT) {
+				return TRUE;
+			}
+
+			data->hwndChild = hWnd;
+			data->hittest = (int16_t)area;
+			return FALSE;
+		}, (LPARAM)&data);
+
+		if (!data.hwndChild) {
+			break;
+		}
+
+		hwndCur = data.hwndChild;
+	}
+
+	if (hwndInvolve) {
+		*hwndInvolve = hwndCur;
+	}
+
+	if (hwndCur == hWnd) {
+		// 没落到子窗口上
+		DWORD_PTR area = HTNOWHERE;
+		SendMessageTimeout(hWnd, WM_NCHITTEST, 0, MAKELPARAM(ptScreen.x, ptScreen.y),
+			SMTO_NORMAL, 10, &area);
+		return (int16_t)area;
+	} else {
+		return hittest;
 	}
 }
 

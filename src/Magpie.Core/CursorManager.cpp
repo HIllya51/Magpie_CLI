@@ -73,25 +73,6 @@ static POINT ScalingToSrc(POINT pt) noexcept {
 	return result;
 }
 
-// SetCursorPos 无法可靠移动光标，虽然调用之后立刻查询光标位置没有问题，但经过一段时
-// 间后再次查询会发现光标位置又回到了设置之前。这可能是因为 OS 异步处理硬件输入队列，
-// SetCursorPos 时队列中仍有旧事件尚未处理。
-// 
-// 这个函数使用 ClipCursor 将光标限制在目标位置一段时间，等待系统将输入队列处理完毕。
-static void ReliableSetCursorPos(POINT pos) noexcept {
-	RECT originClipRect;
-	GetClipCursor(&originClipRect);
-
-	RECT newClipRect{ pos.x,pos.y,pos.x + 1,pos.y + 1 };
-	ClipCursor(&newClipRect);
-
-	// 等待一段时间，不能太短
-	Sleep(5);
-
-	// 还原原始光标限制区域
-	ClipCursor(&originClipRect);
-}
-
 CursorManager::~CursorManager() noexcept {
 	_ShowSystemCursor(true, true);
 	_RestoreClipCursor();
@@ -103,27 +84,8 @@ CursorManager::~CursorManager() noexcept {
 		}
 
 		_StopCapture(cursorPos, true);
-		ReliableSetCursorPos(cursorPos);
+		_ReliableSetCursorPos(cursorPos);
 	}
-}
-
-void CursorManager::Initialize() noexcept {
-	if (ScalingWindow::Get().Options().Is3DGameMode()) {
-		POINT cursorPos;
-		GetCursorPos(&cursorPos);
-		_StartCapture(cursorPos);
-		ReliableSetCursorPos(cursorPos);
-
-		_shouldDrawCursor = true;
-		_ShowSystemCursor(false);
-
-		// 缩放窗口始终透明
-		HWND hwndScaling = ScalingWindow::Get().Handle();
-		SetWindowLong(hwndScaling, GWL_EXSTYLE,
-			GetWindowExStyle(hwndScaling) | WS_EX_TRANSPARENT);
-	}
-
-	Logger::Get().Info("CursorManager 初始化完成");
 }
 
 void CursorManager::Update() noexcept {
@@ -156,6 +118,13 @@ void CursorManager::Update() noexcept {
 	
 	if (_isUnderCapture) {
 		_cursorPos = SrcToScaling(_cursorPos, false);
+	}
+}
+
+void CursorManager::UpdateAfterScalingWindowPosChanged() noexcept {
+	if (_isUnderCapture) {
+		// 确保光标的缩放后位置不变
+		_ReliableSetCursorPos(ScalingToSrc(_cursorPos));
 	}
 }
 
@@ -256,7 +225,8 @@ void CursorManager::_AdjustCursorSpeed() noexcept {
 		_originCursorSpeed = std::clamp(_originCursorSpeed, 1, 20);
 		double newSensitivity = SENSITIVITIES[static_cast<size_t>(_originCursorSpeed) - 1] / scale;
 
-		auto it = std::lower_bound(SENSITIVITIES.begin(), SENSITIVITIES.end(), newSensitivity - 1e-6);
+		auto it = std::lower_bound(SENSITIVITIES.begin(), SENSITIVITIES.end(),
+			newSensitivity - FLOAT_EPSILON<double>);
 		newSpeed = INT(it - SENSITIVITIES.begin()) + 1;
 
 		if (it != SENSITIVITIES.begin() && it != SENSITIVITIES.end()) {
@@ -269,6 +239,37 @@ void CursorManager::_AdjustCursorSpeed() noexcept {
 
 	if (!SystemParametersInfo(SPI_SETMOUSESPEED, 0, (PVOID)(intptr_t)newSpeed, 0)) {
 		Logger::Get().Win32Error("设置光标移速失败");
+	}
+}
+
+// SetCursorPos 无法可靠移动光标，虽然调用之后立刻查询光标位置没有问题，但经过一段时
+// 间后再次查询会发现光标位置又回到了设置之前。这可能是因为 OS 异步处理硬件输入队列，
+// SetCursorPos 时队列中仍有旧事件尚未处理。
+// 
+// 这个函数使用 ClipCursor 将光标限制在目标位置一段时间，等待系统将输入队列处理完毕。
+void CursorManager::_ReliableSetCursorPos(POINT pos) const noexcept {
+	RECT originClipRect;
+	GetClipCursor(&originClipRect);
+
+	RECT newClipRect{ pos.x,pos.y,pos.x + 1,pos.y + 1 };
+	ClipCursor(&newClipRect);
+
+	// 等待一段时间，不能太短
+	Sleep(8);
+
+	// 还原原始光标限制区域
+	ClipCursor(&originClipRect);
+
+	// 有的窗口（比如 Magpie 主窗口）捕获光标后光标形状有时不会主动更新，发送 WM_SETCURSOR
+	// 强制更新。
+	if (_isUnderCapture) {
+		const HWND hwndSrc = ScalingWindow::Get().SrcInfo().Handle();
+
+		HWND hwndChild;
+		int16_t ht = Win32Helper::AdvancedWindowHitTest(hwndSrc, pos, &hwndChild);
+		// wParam 传顶层窗口还是子窗口文档没说明，但测试表明必须传入顶层窗口句柄才能起作用
+		PostMessage(hwndChild, WM_SETCURSOR,
+			(WPARAM)hwndSrc, MAKELPARAM(ht, WM_MOUSEMOVE));
 	}
 }
 
@@ -329,7 +330,7 @@ static bool PtInWindow(HWND hWnd, POINT pt) noexcept {
 			return true;
 		}
 
-		// ChildWindowFromPointEx 返回 NULL 可能是因为命中了透明像素或权限不足
+		// 如果因权限不足等原因失败则视为不透明
 		if (GetLastError() == 0) {
 			// 命中了透明像素
 			return false;
@@ -380,10 +381,32 @@ static HWND WindowFromPoint(HWND hwndScaling, const RECT& swapChainRect, POINT p
 	return data.result;
 }
 
-static bool IsNcArea(int area) noexcept {
+static bool IsNcArea(int16_t area) noexcept {
 	return area == HTLEFT || area == HTTOPLEFT || area == HTTOP ||
 		area == HTTOPRIGHT || area == HTRIGHT || area == HTBOTTOMRIGHT ||
 		area == HTBOTTOM || area == HTBOTTOMLEFT || area == HTCAPTION;
+}
+
+static BOOL CALLBACK EnumMonitorProc(HMONITOR, HDC, LPRECT monitorRect, LPARAM data) {
+	((SmallVectorImpl<RECT>*)data)->push_back(*monitorRect);
+	return TRUE;
+}
+
+static SmallVector<RECT, 0> ObtainMonitorRects() noexcept {
+	SmallVector<RECT, 0> monitorRects;
+	if (!EnumDisplayMonitors(NULL, NULL, EnumMonitorProc, (LPARAM)&monitorRects)) {
+		Logger::Get().Win32Error("EnumDisplayMonitors 失败");
+	}
+	return monitorRects;
+}
+
+static bool AnyIntersectedMonitor(const SmallVectorImpl<RECT>& monitorRects, const RECT& testRect) noexcept {
+	for (const RECT& monitorRect : monitorRects) {
+		if (Win32Helper::IsRectOverlap(monitorRect, testRect)) {
+			return true;
+		}
+	}
+	return false;
 }
 
 void CursorManager::_UpdateCursorClip() noexcept {
@@ -397,6 +420,21 @@ void CursorManager::_UpdateCursorClip() noexcept {
 	// 2. 常规: 根据多屏幕限制光标，捕获/取消捕获，支持 UI 和多屏幕
 
 	if (options.Is3DGameMode()) {
+		if (!_isUnderCapture) {
+			POINT cursorPos;
+			GetCursorPos(&cursorPos);
+			_StartCapture(cursorPos);
+			_ReliableSetCursorPos(cursorPos);
+
+			_shouldDrawCursor = true;
+			_ShowSystemCursor(false);
+
+			// 缩放窗口始终透明
+			HWND hwndScaling = ScalingWindow::Get().Handle();
+			SetWindowLong(hwndScaling, GWL_EXSTYLE,
+				GetWindowExStyle(hwndScaling) | WS_EX_TRANSPARENT);
+		}
+
 		// 开启“在 3D 游戏中限制光标”则每帧都限制一次光标
 		_SetClipCursor(srcRect, true);
 		return;
@@ -432,7 +470,7 @@ void CursorManager::_UpdateCursorClip() noexcept {
 	}
 
 	const HWND hwndScaling = ScalingWindow::Get().Handle();
-	const RECT swapChainRect = ScalingWindow::Get().RendererRect();
+	const RECT rendererRect = ScalingWindow::Get().RendererRect();
 	const HWND hwndSrc = ScalingWindow::Get().SrcInfo().Handle();
 	const bool isSrcFocused = ScalingWindow::Get().SrcInfo().IsFocused();
 	
@@ -460,7 +498,7 @@ void CursorManager::_UpdateCursorClip() noexcept {
 		// 
 		///////////////////////////////////////////////////////////
 
-		HWND hwndCur = WindowFromPoint(hwndScaling, swapChainRect, SrcToScaling(cursorPos, isSrcFocused), false);
+		HWND hwndCur = WindowFromPoint(hwndScaling, rendererRect, SrcToScaling(cursorPos, isSrcFocused), false);
 		_shouldDrawCursor = hwndCur == hwndScaling;
 
 		if (_shouldDrawCursor) {
@@ -469,16 +507,15 @@ void CursorManager::_UpdateCursorClip() noexcept {
 
 			if (!stopCapture) {
 				// 检查源窗口是否被遮挡
-				hwndCur = WindowFromPoint(hwndScaling, swapChainRect, cursorPos, true);
+				hwndCur = WindowFromPoint(hwndScaling, rendererRect, cursorPos, true);
 
 				// 检查光标是否在源窗口的非客户区
-				DWORD_PTR area = HTNOWHERE;
-				SendMessageTimeout(hwndSrc, WM_NCHITTEST, 0, MAKELPARAM(cursorPos.x, cursorPos.y),
-					SMTO_NORMAL, 10, &area);
-				_isOnSrcTitleBar = area == HTCAPTION;
+				const int16_t area = Win32Helper::AdvancedWindowHitTest(hwndSrc, cursorPos);
+				// 上边框处也可以拖拽
+				_isOnSrcTitleBar = area == HTCAPTION || area == HTTOP || area == HTTOPLEFT || area == HTTOPRIGHT;
 
 				stopCapture = (hwndCur != hwndSrc && (!IsChild(hwndSrc, hwndCur) ||
-					!((GetWindowStyle(hwndCur) & WS_CHILD)))) || IsNcArea((int)area);
+					!((GetWindowStyle(hwndCur) & WS_CHILD)))) || IsNcArea(area);
 			}
 
 			if (stopCapture) {
@@ -523,7 +560,7 @@ void CursorManager::_UpdateCursorClip() noexcept {
 		// 
 		/////////////////////////////////////////////////////////
 
-		HWND hwndCur = WindowFromPoint(hwndScaling, swapChainRect, cursorPos, false);
+		HWND hwndCur = WindowFromPoint(hwndScaling, rendererRect, cursorPos, false);
 		_shouldDrawCursor = hwndCur == hwndScaling;
 
 		if (_shouldDrawCursor) {
@@ -535,13 +572,12 @@ void CursorManager::_UpdateCursorClip() noexcept {
 
 				if (startCapture) {
 					// 检查源窗口是否被遮挡
-					hwndCur = WindowFromPoint(hwndScaling, swapChainRect, newCursorPos, true);
+					hwndCur = WindowFromPoint(hwndScaling, rendererRect, newCursorPos, true);
 
 					// 检查光标是否在源窗口的客户区
-					DWORD_PTR area = HTNOWHERE;
-					SendMessageTimeout(hwndSrc, WM_NCHITTEST, 0, MAKELPARAM(newCursorPos.x, newCursorPos.y),
-						SMTO_NORMAL, 10, &area);
-					_isOnSrcTitleBar = area == HTCAPTION;
+					const int16_t area = Win32Helper::AdvancedWindowHitTest(hwndSrc, newCursorPos);
+					// 上边框处也可以拖拽
+					_isOnSrcTitleBar = area == HTCAPTION || area == HTTOP || area == HTTOPLEFT || area == HTTOPRIGHT;
 
 					startCapture = (hwndCur == hwndSrc || ((IsChild(hwndSrc, hwndCur) &&
 						(GetWindowStyle(hwndCur) & WS_CHILD)))) && !IsNcArea((int)area);
@@ -563,15 +599,15 @@ void CursorManager::_UpdateCursorClip() noexcept {
 				if (_isOnOverlay) {
 					// 从内部移到外部，此时有 UI 贴边
 					if (newCursorPos.x >= srcRect.right) {
-						cursorPos.x += swapChainRect.right - destRect.right;
+						cursorPos.x += rendererRect.right - destRect.right;
 					} else if (newCursorPos.x < srcRect.left) {
-						cursorPos.x -= destRect.left - swapChainRect.left;
+						cursorPos.x -= destRect.left - rendererRect.left;
 					}
 
 					if (newCursorPos.y >= srcRect.bottom) {
-						cursorPos.y += swapChainRect.bottom - destRect.bottom;
+						cursorPos.y += rendererRect.bottom - destRect.bottom;
 					} else if (newCursorPos.y < srcRect.top) {
-						cursorPos.y -= destRect.top - swapChainRect.top;
+						cursorPos.y -= destRect.top - rendererRect.top;
 					}
 
 					if (!MonitorFromPoint(cursorPos, MONITOR_DEFAULTTONULL)) {
@@ -586,7 +622,7 @@ void CursorManager::_UpdateCursorClip() noexcept {
 						std::clamp(cursorPos.y, destRect.top, destRect.bottom - 1)
 					};
 
-					if (WindowFromPoint(hwndScaling, swapChainRect, clampedPos, false) == hwndScaling) {
+					if (WindowFromPoint(hwndScaling, rendererRect, clampedPos, false) == hwndScaling) {
 						if (!(style & WS_EX_TRANSPARENT)) {
 							SetWindowLong(hwndScaling, GWL_EXSTYLE, style | WS_EX_TRANSPARENT);
 						}
@@ -626,51 +662,107 @@ void CursorManager::_UpdateCursorClip() noexcept {
 		// 根据当前光标位置的四个方向有无屏幕来确定应该在哪些方向限制光标，但这无法
 		// 处理屏幕之间存在间隙的情况。解决办法是 _StopCapture 只在目标位置存在屏幕时才取消捕获，
 		// 当光标试图移动到间隙中时将被挡住。如果光标的速度足以跨越间隙，则它依然可以在屏幕间移动。
-		POINT scaledPos = _isUnderCapture ? SrcToScaling(cursorPos, true) : cursorPos;
+		const POINT scaledPos = _isUnderCapture ? SrcToScaling(cursorPos, true) : cursorPos;
 
 		RECT clips{ LONG_MIN, LONG_MIN, LONG_MAX, LONG_MAX };
 
-		// left
-		RECT rect{ LONG_MIN, scaledPos.y, swapChainRect.left, scaledPos.y + 1 };
-		if (!MonitorFromRect(&rect, MONITOR_DEFAULTTONULL)) {
-			if (isSrcFocused) {
-				clips.left = _isUnderCapture ? srcRect.left : destRect.left;
-			} else if (_isUnderCapture && destRect.left == swapChainRect.left) {
-				// 存在黑边时无需限制，进入黑边会停止捕获，否则应将光标限制在源窗口内
-				clips.left = srcRect.left;
+		const SmallVector<RECT, 0> monitorRects = ObtainMonitorRects();
+		if (!monitorRects.empty()) {
+			// left
+			RECT rect{ LONG_MIN, scaledPos.y, rendererRect.left, scaledPos.y + 1 };
+			if (!AnyIntersectedMonitor(monitorRects, rect)) {
+				if (_isUnderCapture) {
+					// 已确定缩放窗口左侧无屏幕，计算屏幕左边缘
+					LONG minLeft = LONG_MAX;
+					for (const RECT& monitorRect : monitorRects) {
+						if (monitorRect.top <= scaledPos.y && monitorRect.bottom > scaledPos.y) {
+							minLeft = std::min(minLeft, monitorRect.left);
+						}
+					}
+
+					// 存在黑边且源窗口位于前台时，应阻止光标进入黑边
+					if ((minLeft < destRect.left && isSrcFocused) || minLeft == destRect.left) {
+						clips.left = srcRect.left;
+					} else {
+						// 将缩放后光标位置限制在屏幕内
+						clips.left = ScalingToSrc({ minLeft,scaledPos.y }).x;
+					}
+				} else if (isSrcFocused && destRect.left != rendererRect.left) {
+					// 源窗口在前台时阻止光标进入黑边
+					clips.left = destRect.left;
+				}
+			}
+
+			// top
+			rect = { scaledPos.x, LONG_MIN, scaledPos.x + 1, rendererRect.top };
+			if (!AnyIntersectedMonitor(monitorRects, rect)) {
+				if (_isUnderCapture) {
+					LONG minTop = LONG_MAX;
+					for (const RECT& monitorRect : monitorRects) {
+						if (monitorRect.left <= scaledPos.x && monitorRect.right > scaledPos.x) {
+							minTop = std::min(minTop, monitorRect.top);
+						}
+					}
+
+					if ((minTop < destRect.top && isSrcFocused) || minTop == destRect.top) {
+						clips.top = srcRect.top;
+					} else {
+						clips.top = ScalingToSrc({ scaledPos.x,minTop }).y;
+					}
+				} else if (isSrcFocused && destRect.top != rendererRect.top) {
+					clips.top = destRect.top;
+				}
+			}
+
+			// right
+			rect = { rendererRect.right, scaledPos.y, LONG_MAX, scaledPos.y + 1 };
+			if (!AnyIntersectedMonitor(monitorRects, rect)) {
+				if (isSrcFocused) {
+					clips.right = _isUnderCapture ? srcRect.right : destRect.right;
+				} else if (_isUnderCapture && destRect.right == rendererRect.right) {
+					clips.right = srcRect.right;
+				}
+
+				if (_isUnderCapture) {
+					LONG maxRight = LONG_MIN;
+					for (const RECT& monitorRect : monitorRects) {
+						if (monitorRect.top <= scaledPos.y && monitorRect.bottom > scaledPos.y) {
+							maxRight = std::max(maxRight, monitorRect.right);
+						}
+					}
+
+					if ((maxRight > destRect.right && isSrcFocused) || maxRight == destRect.right) {
+						clips.right = srcRect.right;
+					} else {
+						clips.right = ScalingToSrc({ maxRight,scaledPos.y }).x;
+					}
+				} else if (isSrcFocused && destRect.right != rendererRect.right) {
+					clips.right = destRect.right;
+				}
+			}
+
+			// bottom
+			rect = { scaledPos.x, rendererRect.bottom, scaledPos.x + 1, LONG_MAX };
+			if (!AnyIntersectedMonitor(monitorRects, rect)) {
+				if (_isUnderCapture) {
+					LONG maxBottom = LONG_MIN;
+					for (const RECT& monitorRect : monitorRects) {
+						if (monitorRect.left <= scaledPos.x && monitorRect.right > scaledPos.x) {
+							maxBottom = std::max(maxBottom, monitorRect.bottom);
+						}
+					}
+
+					if ((maxBottom > destRect.bottom && isSrcFocused) || maxBottom == destRect.bottom) {
+						clips.bottom = srcRect.bottom;
+					} else {
+						clips.bottom = ScalingToSrc({ scaledPos.x,maxBottom }).y;
+					}
+				} else if (isSrcFocused && destRect.bottom != rendererRect.bottom) {
+					clips.bottom = destRect.bottom;
+				}
 			}
 		}
-
-		// top
-		rect = { scaledPos.x, LONG_MIN, scaledPos.x + 1, swapChainRect.top };
-		if (!MonitorFromRect(&rect, MONITOR_DEFAULTTONULL)) {
-			if (isSrcFocused) {
-				clips.top = _isUnderCapture ? srcRect.top : destRect.top;
-			} else if (_isUnderCapture && destRect.top == swapChainRect.top) {
-				clips.top = srcRect.top;
-			}
-		}
-
-		// right
-		rect = { swapChainRect.right, scaledPos.y, LONG_MAX, scaledPos.y + 1 };
-		if (!MonitorFromRect(&rect, MONITOR_DEFAULTTONULL)) {
-			if (isSrcFocused) {
-				clips.right = _isUnderCapture ? srcRect.right : destRect.right;
-			} else if (_isUnderCapture && destRect.right == swapChainRect.right) {
-				clips.right = srcRect.right;
-			}
-		}
-
-		// bottom
-		rect = { scaledPos.x, swapChainRect.bottom, scaledPos.x + 1, LONG_MAX };
-		if (!MonitorFromRect(&rect, MONITOR_DEFAULTTONULL)) {
-			if (isSrcFocused) {
-				clips.bottom = _isUnderCapture ? srcRect.bottom : destRect.bottom;
-			} else if (_isUnderCapture && destRect.bottom == swapChainRect.bottom) {
-				clips.bottom = srcRect.bottom;
-			}
-		}
-
+		
 		if (clips == RECT{ LONG_MIN, LONG_MIN, LONG_MAX, LONG_MAX }) {
 			_RestoreClipCursor();
 		} else {
@@ -682,17 +774,7 @@ void CursorManager::_UpdateCursorClip() noexcept {
 
 	// SetCursorPos 应在 ClipCursor 之后，否则会受到上一次 ClipCursor 的影响
 	if (cursorPos != originCursorPos) {
-		ReliableSetCursorPos(cursorPos);
-
-		// 有的窗口（比如 Magpie 主窗口）捕获光标后光标形状有时不会主动更新，发送 WM_SETCURSOR
-		// 强制更新。
-		if (_isUnderCapture) {
-			DWORD_PTR area = HTNOWHERE;
-			SendMessageTimeout(hwndSrc, WM_NCHITTEST,
-				0, MAKELPARAM(cursorPos.x, cursorPos.y), SMTO_NORMAL, 10, &area);
-			PostMessage(hwndSrc, WM_SETCURSOR,
-				(WPARAM)hwndSrc, MAKELPARAM(area, WM_MOUSEMOVE));
-		}
+		_ReliableSetCursorPos(cursorPos);
 	}
 }
 

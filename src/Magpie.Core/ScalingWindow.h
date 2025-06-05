@@ -86,20 +86,26 @@ private:
 	ScalingWindow() noexcept;
 	~ScalingWindow() noexcept;
 
-	// 提供 width 和 height 之一，另一个应为 0。如果 isRendererSize 为真，传入的
-	// width 和 height 为渲染矩形尺寸，否则为缩放窗口尺寸。返回时 width 和 height
-	// 是新的缩放窗口尺寸。
+	// 确保渲染窗口长宽比不变，且限制最小和最大尺寸。必须提供 width 和 height 之一，另一个
+	// 应为 0。如果 isRendererSize 为真，传入的 width 和 height 为渲染矩形尺寸，否则为缩
+	// 放窗口尺寸。返回时 width 和 height 是新的缩放窗口尺寸。
 	bool _CalcWindowedScalingWindowSize(int& width, int& height, bool isRendererSize) const noexcept;
 
 	RECT _CalcWindowedRendererRect() const noexcept;
 
 	ScalingError _CalcFullscreenRendererRect(uint32_t& monitorCount) noexcept;
 
+	void _Show() noexcept;
+
 	bool _CheckSrcState() noexcept;
 
 	bool _CheckForegroundFor3DGameMode(HWND hwndFore) const noexcept;
 
 	void _SetWindowProps() const noexcept;
+
+	void _UpdateWindowProps() const noexcept;
+
+	void _UpdateTouchProps(const RECT& srcRect) const noexcept;
 
 	void _RemoveWindowProps() const noexcept;
 
@@ -115,7 +121,9 @@ private:
 
 	void _RepostionBorderHelperWindows() noexcept;
 
-	void _CreateTouchHoleWindows() noexcept;
+	RECT _CalcSrcTouchRect() const noexcept;
+
+	void _UpdateTouchHoleWindows(bool onInit) noexcept;
 
 	void _UpdateFrameMargins() const noexcept;
 
@@ -153,6 +161,8 @@ private:
 
 	ScalingError _runtimeError = ScalingError::NoError;
 
+	// 第一帧渲染完成后再显示
+	bool _isFirstFrame = false;
 	bool _isResizingOrMoving = false;
 	bool _isSrcRepositioning = false;
 };

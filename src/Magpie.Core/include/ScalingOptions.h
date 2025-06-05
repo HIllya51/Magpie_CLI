@@ -77,7 +77,7 @@ struct EffectOption {
 
 	bool HasScale() const noexcept {
 		return scalingType != ScalingType::Normal ||
-			std::abs(scale.first - 1.0f) > 1e-5 || std::abs(scale.second - 1.0f) > 1e-5;
+			!IsApprox(scale.first, 1.0f) || !IsApprox(scale.second, 1.0f);
 	}
 };
 
@@ -146,6 +146,7 @@ struct ScalingOptions {
 	CursorInterpolationMode cursorInterpolationMode = CursorInterpolationMode::NearestNeighbor;
 	DuplicateFrameDetectionMode duplicateFrameDetectionMode = DuplicateFrameDetectionMode::Dynamic;
 	ToolbarState initialToolbarState = ToolbarState::AutoHide;
+	float initialWindowedScaleFactor = 0.0f;
 	std::filesystem::path screenshotsDir;
 
 	// 下面的成员支持在缩放时修改
