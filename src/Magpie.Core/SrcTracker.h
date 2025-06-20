@@ -20,19 +20,25 @@ enum class SrcWindowKind {
 	OnlyThickFrame
 };
 
-class SrcInfo {
+class SrcTracker {
 public:
-	SrcInfo() = default;
+	SrcTracker() = default;
 
 	// 防止意外复制
-	SrcInfo(const SrcInfo&) = delete;
-	SrcInfo(SrcInfo&&) = delete;
+	SrcTracker(const SrcTracker&) = delete;
+	SrcTracker(SrcTracker&&) = delete;
 
 	ScalingError Set(HWND hWnd, const ScalingOptions& options) noexcept;
 
-	bool UpdateState(HWND hwndFore, bool isWindowedMode, bool& srcRectChanged, bool& srcSizeChanged) noexcept;
+	bool UpdateState(
+		HWND hwndFore,
+		bool isWindowedMode,
+		bool& srcRectChanged,
+		bool& srcSizeChanged,
+		bool& srcMovingChanged
+	) noexcept;
 
-	void UpdateAfterMoved(int offsetX, int offsetY) noexcept;
+	bool Move(int offsetX, int offsetY) noexcept;
 
 	HWND Handle() const noexcept {
 		return _hWnd;
@@ -63,6 +69,11 @@ public:
 		return _windowKind;
 	}
 
+	// 只在窗口模式缩放时有效
+	bool IsMoving() const noexcept {
+		return _isMoving;
+	}
+
 private:
 	ScalingError _CalcSrcRect(const ScalingOptions& options) noexcept;
 
@@ -75,6 +86,7 @@ private:
 
 	bool _isFocused = false;
 	bool _isMaximized = false;
+	bool _isMoving = false;
 };
 
 }

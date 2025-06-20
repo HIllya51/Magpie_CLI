@@ -285,8 +285,8 @@ bool Renderer::Render(bool force, bool waitForRenderComplete) noexcept {
 	return true;
 }
 
-bool Renderer::Resize() noexcept {
-	if (!_presenter->Resize()) {
+bool Renderer::OnResize() noexcept {
+	if (!_presenter->OnResize()) {
 		Logger::Get().Error("更改呈现器尺寸失败");
 		return false;
 	}
@@ -340,20 +340,19 @@ bool Renderer::Resize() noexcept {
 	_lastAccessMutexKey = 0;
 
 	_UpdateDestRect();
-
 	return true;
 }
 
-void Renderer::EndResize() noexcept {
+void Renderer::OnEndResize() noexcept {
 	bool shouldRedraw = false;
-	_presenter->EndResize(shouldRedraw);
+	_presenter->OnEndResize(shouldRedraw);
 
 	if (shouldRedraw) {
 		_FrontendRender();
 	}
 }
 
-void Renderer::Move() noexcept {
+void Renderer::OnMove() noexcept {
 	_UpdateDestRect();
 }
 
@@ -390,7 +389,7 @@ void Renderer::ToggleToolbarState() noexcept {
 }
 
 const RECT& Renderer::SrcRect() const noexcept {
-	return ScalingWindow::Get().SrcInfo().SrcRect();
+	return ScalingWindow::Get().SrcTracker().SrcRect();
 }
 
 bool Renderer::_InitFrameSource() noexcept {
@@ -745,7 +744,7 @@ HANDLE Renderer::_CreateSharedTexture(ID3D11Texture2D* effectsOutput) noexcept {
 
 void Renderer::_BackendThreadProc() noexcept {
 #ifdef _DEBUG
-	SetThreadDescription(GetCurrentThread(), L"[Magpie]缩放后端线程");
+	SetThreadDescription(GetCurrentThread(), L"Magpie-缩放后端线程");
 #endif
 
 	winrt::init_apartment(winrt::apartment_type::single_threaded);
@@ -815,7 +814,7 @@ void Renderer::_BackendThreadProc() noexcept {
 			break;
 		case FrameSourceState::Error:
 			// 捕获出错，退出缩放
-			ScalingWindow::Get().Dispatcher().TryEnqueue([]() {
+			ScalingWindow::Dispatcher().TryEnqueue([]() {
 				ScalingWindow::Get().RuntimeError(ScalingError::CaptureFailed);
 				ScalingWindow::Get().Destroy();
 			});
@@ -864,7 +863,7 @@ HANDLE Renderer::_InitBackend() noexcept {
 		std::optional<float> maxFrameRate;
 		if (_frameSource->WaitType() == FrameSourceWaitType::NoWait) {
 			// 某些捕获方式不会限制捕获帧率，因此将捕获帧率限制为屏幕刷新率
-			const HWND hwndSrc = ScalingWindow::Get().SrcInfo().Handle();
+			const HWND hwndSrc = ScalingWindow::Get().SrcTracker().Handle();
 			if (HMONITOR hMon = MonitorFromWindow(hwndSrc, MONITOR_DEFAULTTONEAREST)) {
 				MONITORINFOEX mi{ sizeof(MONITORINFOEX) };
 				GetMonitorInfo(hMon, &mi);
@@ -1219,19 +1218,19 @@ LRESULT CALLBACK Renderer::_LowLevelKeyboardHook(int nCode, WPARAM wParam, LPARA
 	KBDLLHOOKSTRUCT* info = (KBDLLHOOKSTRUCT*)lParam;
 	if (info->vkCode == VK_SNAPSHOT) {
 		// 为了缩短钩子处理时间，异步执行所有逻辑
-		ScalingWindow::Get().Dispatcher().TryEnqueue([]() -> winrt::fire_and_forget {
+		ScalingWindow::Dispatcher().TryEnqueue([]() -> winrt::fire_and_forget {
 			// 暂时隐藏光标
 			Renderer& renderer = ScalingWindow::Get().Renderer();
 			renderer._cursorDrawer.IsCursorVisible(false);
 			renderer._FrontendRender();
 
-			const HWND hwndScaling = ScalingWindow::Get().Handle();
+			const uint32_t runId = ScalingWindow::RunId();
 
-			winrt::DispatcherQueue dispatcher = ScalingWindow::Get().Dispatcher();
+			winrt::DispatcherQueue dispatcher = ScalingWindow::Dispatcher();
 			co_await 200ms;
 			co_await dispatcher;
 
-			if (ScalingWindow::Get().Handle() == hwndScaling &&
+			if (ScalingWindow::RunId() == runId &&
 				!renderer._cursorDrawer.IsCursorVisible()
 			) {
 				renderer._cursorDrawer.IsCursorVisible(true);

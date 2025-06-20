@@ -1,5 +1,5 @@
 #include "pch.h"
-#include "SrcInfo.h"
+#include "SrcTracker.h"
 #include "Win32Helper.h"
 #include "Logger.h"
 #include <dwmapi.h>
@@ -80,7 +80,7 @@ static bool GetClientRectOfUWP(HWND hWnd, RECT& rect) noexcept {
 	return true;
 }
 
-ScalingError SrcInfo::Set(HWND hWnd, const ScalingOptions& options) noexcept {
+ScalingError SrcTracker::Set(HWND hWnd, const ScalingOptions& options) noexcept {
 	_hWnd = hWnd;
 
 	if (!IsWindow(_hWnd)) {
@@ -184,7 +184,19 @@ ScalingError SrcInfo::Set(HWND hWnd, const ScalingOptions& options) noexcept {
 	return _CalcSrcRect(options);
 }
 
-bool SrcInfo::UpdateState(HWND hwndFore, bool isWindowedMode, bool& srcRectChanged, bool& srcSizeChanged) noexcept {
+static bool IsPrimaryMouseButtonDown() noexcept {
+	const bool isSwapped = GetSystemMetrics(SM_SWAPBUTTON);
+	const int vkPrimary = isSwapped ? VK_RBUTTON : VK_LBUTTON;
+	return GetAsyncKeyState(vkPrimary) & 0x8000;
+}
+
+bool SrcTracker::UpdateState(
+	HWND hwndFore,
+	bool isWindowedMode,
+	bool& srcRectChanged,
+	bool& srcSizeChanged,
+	bool& srcMovingChanged
+) noexcept {
 	if (!IsWindow(_hWnd)) {
 		Logger::Get().Error("源窗口已销毁");
 		return false;
@@ -215,23 +227,81 @@ bool SrcInfo::UpdateState(HWND hwndFore, bool isWindowedMode, bool& srcRectChang
 	srcRectChanged = oldWindowRect != _windowRect || oldMaximized != _isMaximized;
 	srcSizeChanged = Win32Helper::GetSizeOfRect(oldWindowRect) != Win32Helper::GetSizeOfRect(_windowRect);
 
-	if (isWindowedMode && srcRectChanged && !srcSizeChanged) {
-		const LONG offsetX = _windowRect.left - oldWindowRect.left;
-		const LONG offsetY = _windowRect.top - oldWindowRect.top;
-		Win32Helper::OffsetRect(_windowFrameRect, offsetX, offsetY);
-		Win32Helper::OffsetRect(_srcRect, offsetX, offsetY);
+	if (isWindowedMode && !srcSizeChanged) {
+		bool isMoving = false;
+		GUITHREADINFO guiThreadInfo{ .cbSize = sizeof(GUITHREADINFO) };
+		if (GetGUIThreadInfo(GetWindowThreadProcessId(_hWnd, nullptr), &guiThreadInfo)) {
+			isMoving = guiThreadInfo.flags & GUI_INMOVESIZE;
+		} else {
+			Logger::Get().Win32Error("GetGUIThreadInfo 失败");
+		}
+
+		// 处理自己实现拖拽逻辑的窗口：将鼠标左键按下视为开始拖拽，释放视为拖拽结束。
+		// 可能会有误判，但幸好后果不太严重。
+		if (_isMoving || (!_isMoving && srcRectChanged)) {
+			isMoving = isMoving || IsPrimaryMouseButtonDown();
+		}
+
+		if (srcRectChanged) {
+			const LONG offsetX = _windowRect.left - oldWindowRect.left;
+			const LONG offsetY = _windowRect.top - oldWindowRect.top;
+			Win32Helper::OffsetRect(_windowFrameRect, offsetX, offsetY);
+			Win32Helper::OffsetRect(_srcRect, offsetX, offsetY);
+		}
+
+		if (_isMoving != isMoving) {
+			srcMovingChanged = true;
+			_isMoving = isMoving;
+		}
 	}
 	
 	return true;
 }
 
-void SrcInfo::UpdateAfterMoved(int offsetX, int offsetY) noexcept {
-	Win32Helper::OffsetRect(_srcRect, offsetX, offsetY);
+bool SrcTracker::Move(int offsetX, int offsetY) noexcept {
+	assert(!_isMaximized);
+
+	if (offsetX == 0 && offsetY == 0) {
+		return true;
+	}
+
+	if (!SetWindowPos(
+		_hWnd,
+		NULL,
+		_windowRect.left + offsetX,
+		_windowRect.top + offsetY,
+		0,
+		0,
+		SWP_NOACTIVATE | SWP_NOREDRAW | SWP_NOSIZE | SWP_NOZORDER
+	)) {
+		Logger::Get().Win32Error("SetWindowPos 失败");
+		return false;
+	}
+
+	// 需要重新检索窗口矩形，因为 SetWindowPos 不保证准确设置。常见的情况是源窗口
+	// 被 DPI 虚拟化时经常有轻微偏移，此外技术上说源窗口可以在 WM_WINDOWPOSCHANGING
+	// 中随意改变尺寸和位置。
+	const RECT oldWindowRect = _windowRect;
+
+	if (!GetWindowRect(_hWnd, &_windowRect)) {
+		Logger::Get().Win32Error("GetWindowRect 失败");
+		return false;
+	}
+
+	if (Win32Helper::GetSizeOfRect(oldWindowRect) != Win32Helper::GetSizeOfRect(_windowRect)) {
+		Logger::Get().Error("源窗口意外出现尺寸变化");
+		return false;
+	}
+
+	offsetX = _windowRect.left - oldWindowRect.left;
+	offsetY = _windowRect.top - oldWindowRect.top;
 	Win32Helper::OffsetRect(_windowFrameRect, offsetX, offsetY);
-	Win32Helper::OffsetRect(_windowRect, offsetX, offsetY);
+	Win32Helper::OffsetRect(_srcRect, offsetX, offsetY);
+
+	return true;
 }
 
-ScalingError SrcInfo::_CalcSrcRect(const ScalingOptions& options) noexcept {
+ScalingError SrcTracker::_CalcSrcRect(const ScalingOptions& options) noexcept {
 	if (_windowKind == SrcWindowKind::NoDecoration) {
 		// NoDecoration 类型的窗口不裁剪非客户区。它们要么没有非客户区，要么非客户区不是由
 		// DWM 绘制，前者无需裁剪，后者不能裁剪。

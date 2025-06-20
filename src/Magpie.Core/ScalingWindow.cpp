@@ -57,11 +57,7 @@ static void LogRects(const RECT& srcRect, const RECT& rendererRect, const RECT& 
 		windowRect.right - windowRect.left, windowRect.bottom - windowRect.top));
 }
 
-ScalingError ScalingWindow::Create(
-	HWND hwndSrc,
-	winrt::DispatcherQueue dispatcher,
-	ScalingOptions options
-) noexcept {
+ScalingError ScalingWindow::Create(HWND hwndSrc, ScalingOptions options) noexcept {
 	if (Handle()) {
 		return ScalingError::ScalingFailedGeneral;
 	}
@@ -74,7 +70,6 @@ ScalingError ScalingWindow::Create(
 #endif
 
 	// 缩放结束后失效
-	_dispatcher = std::move(dispatcher);
 	_options = std::move(options);
 	_runtimeError = ScalingError::NoError;
 	_isFirstFrame = true;
@@ -95,12 +90,12 @@ ScalingError ScalingWindow::Create(
 		Win32Helper::IsProcessElevated() ? "是" : "否"
 	));
 
-	if (ScalingError error = _srcInfo.Set(hwndSrc, _options); error != ScalingError::NoError) {
-		Logger::Get().Error("初始化 SrcInfo 失败");
+	if (ScalingError error = _srcTracker.Set(hwndSrc, _options); error != ScalingError::NoError) {
+		Logger::Get().Error("初始化 SrcTracker 失败");
 		return error;
 	}
 
-	if (_srcInfo.IsZoomed()) {
+	if (_srcTracker.IsZoomed()) {
 		if (_options.IsWindowedMode()) {
 			Logger::Get().Info("已最大化的窗口不支持窗口模式缩放");
 			return ScalingError::BannedInWindowedMode;
@@ -127,13 +122,13 @@ ScalingError ScalingWindow::Create(
 		return Ignore();
 	}();
 
-	const SrcWindowKind srcWindowKind = _srcInfo.WindowKind();
+	const SrcWindowKind srcWindowKind = _srcTracker.WindowKind();
 	const bool isWin11 = Win32Helper::GetOSVersion().IsWin11();
 	// 不存在非客户区，渲染无需创建在子窗口里
 	const bool isAllClient = !isWin11 &&
 		(srcWindowKind == SrcWindowKind::NoBorder || srcWindowKind == SrcWindowKind::NoDecoration);
 	if (_options.IsWindowedMode()) {
-		const RECT& srcWindowRect = _srcInfo.WindowRect();
+		const RECT& srcWindowRect = _srcTracker.WindowRect();
 
 		const POINT windowCenter{
 			(srcWindowRect.left + srcWindowRect.right) / 2,
@@ -154,7 +149,7 @@ ScalingError ScalingWindow::Create(
 				_topBorderThicknessInClient = Win32Helper::GetNativeWindowBorderThickness(_currentDpi);
 			}
 
-			if (_srcInfo.WindowKind() == SrcWindowKind::NoBorder) {
+			if (_srcTracker.WindowKind() == SrcWindowKind::NoBorder) {
 				// Win11 中为客户区内的边框预留空间
 				assert(isWin11);
 				_nonTopBorderThicknessInClient = _topBorderThicknessInClient;
@@ -163,7 +158,7 @@ ScalingError ScalingWindow::Create(
 			}
 		}
 
-		const SIZE srcSize = Win32Helper::GetSizeOfRect(_srcInfo.SrcRect());
+		const SIZE srcSize = Win32Helper::GetSizeOfRect(_srcTracker.SrcRect());
 		// 填入渲染矩形尺寸
 		int windowWidth = 0;
 		int windowHeight = 0;
@@ -279,11 +274,11 @@ ScalingError ScalingWindow::Create(
 		_hwndRenderer = Handle();
 	}
 
-	LogRects(_srcInfo.SrcRect(), _rendererRect, _windowRect);
+	LogRects(_srcTracker.SrcRect(), _rendererRect, _windowRect);
 	
 	if (!_options.IsWindowedMode() && !_options.IsAllowScalingMaximized()) {
 		// 检查源窗口是否是无边框全屏窗口
-		if (srcWindowKind == SrcWindowKind::NoDecoration && _srcInfo.WindowRect() == _rendererRect) {
+		if (srcWindowKind == SrcWindowKind::NoDecoration && _srcTracker.WindowRect() == _rendererRect) {
 			Logger::Get().Info("源窗口已全屏");
 			Destroy();
 			return ScalingError::Maximized;
@@ -309,9 +304,9 @@ ScalingError ScalingWindow::Create(
 }
 
 void ScalingWindow::Render() noexcept {
-	const bool originIsSrcFocused = _srcInfo.IsFocused();
+	const bool originIsSrcFocused = _srcTracker.IsFocused();
 
-	if (!_CheckSrcState()) {
+	if (!_UpdateSrcState()) {
 		Logger::Get().Info("源窗口状态改变，停止缩放");
 		// 调整尺寸时也会执行渲染，延迟销毁可以防止崩溃
 		_dispatcher.TryEnqueue([]() {
@@ -320,7 +315,7 @@ void ScalingWindow::Render() noexcept {
 		return;
 	}
 
-	if (_srcInfo.IsFocused() != originIsSrcFocused) {
+	if (_srcTracker.IsFocused() != originIsSrcFocused) {
 		_UpdateFocusState();
 	}
 
@@ -329,7 +324,7 @@ void ScalingWindow::Render() noexcept {
 	// 创建 D3D 设备后（可能是 OS bug），第二次是我们隐藏系统光标。
 	_cursorManager->Update();
 
-	if (_renderer->Render(false, _isFirstFrame) && _isFirstFrame) {
+	if (_renderer->Render(false, _shouldWaitForRender || _isFirstFrame) && _isFirstFrame) {
 		_isFirstFrame = false;
 		// 第一帧渲染完成后显示缩放窗口
 		_Show();
@@ -344,11 +339,10 @@ void ScalingWindow::ToggleToolbarState() noexcept {
 
 void ScalingWindow::RecreateAfterSrcRepositioned() noexcept {
 	_isSrcRepositioning = false;
-	Create(_srcInfo.Handle(), _dispatcher, std::move(_options));
+	Create(_srcTracker.Handle(), std::move(_options));
 }
 
 void ScalingWindow::CleanAfterSrcRepositioned() noexcept {
-	_dispatcher = nullptr;
 	_options = {};
 	_isSrcRepositioning = false;
 }
@@ -372,7 +366,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 		// 见 https://devblogs.microsoft.com/oldnewthing/20130412-00/?p=4683
 		AttachThreadInput(
 			GetCurrentThreadId(),
-			GetWindowThreadProcessId(_srcInfo.Handle(), nullptr),
+			GetWindowThreadProcessId(_srcTracker.Handle(), nullptr),
 			FALSE
 		);
 
@@ -402,7 +396,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 				DwmExtendFrameIntoClientArea(Handle(), &margins);
 			}
 
-			if (_srcInfo.WindowKind() == SrcWindowKind::NoDecoration && Win32Helper::GetOSVersion().IsWin11()) {
+			if (_srcTracker.WindowKind() == SrcWindowKind::NoDecoration && Win32Helper::GetOSVersion().IsWin11()) {
 				// Win11 中禁用边框和圆角以模仿 NoDecoration 的样式
 				COLORREF color = DWMWA_COLOR_NONE;
 				DwmSetWindowAttribute(Handle(), DWMWA_BORDER_COLOR, &color, sizeof(color));
@@ -431,6 +425,9 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	case WM_ENTERSIZEMOVE:
 	{
 		_isResizingOrMoving = true;
+		if (!_isPreparingForResizing) {
+			_cursorManager->OnStartMove();
+		}
 
 		// 广播用户开始调整缩放窗口大小或移动缩放窗口
 		PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 3, (LPARAM)Handle());
@@ -439,7 +436,8 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	case WM_EXITSIZEMOVE:
 	{
 		_isResizingOrMoving = false;
-		_renderer->EndResize();
+		_renderer->OnEndResize();
+		_cursorManager->OnEndResizeMove();
 
 		// 广播缩放窗口位置或大小改变
 		PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 2, (LPARAM)Handle());
@@ -456,9 +454,26 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 			break;
 		}
 
-		if (_cursorManager->IsCursorOnSrcTopBorder() || _renderer->IsCursorOnOverlayCaptionArea()) {
-			// 鼠标在源窗口的上边框或叠加层工具栏上时可以拖动缩放窗口
+		// 鼠标在叠加层工具栏上时可以拖动缩放窗口
+		if (_renderer->IsCursorOnOverlayCaptionArea()) {
 			return HTCAPTION;
+		}
+
+		// 立即执行命中测试
+		_cursorManager->Update();
+
+		const std::atomic<int16_t>& atomicVal = _cursorManager->SrcBorderHitTest();
+		// 等待异步命中测试
+		for (int i = 0; i < 3; ++i) {
+			atomicVal.wait(HTTRANSPARENT, std::memory_order_relaxed);
+
+			const int16_t value = atomicVal.load(std::memory_order_relaxed);
+			if (value == HTNOWHERE) {
+				break;
+			} else if (value != HTTRANSPARENT) {
+				// 返回源窗口的命中测试结果
+				return value;
+			}
 		}
 
 		break;
@@ -473,8 +488,8 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 		// 2、光标位于叠加层或黑边上
 		// 这时鼠标点击将激活源窗口
 		const HWND hwndForground = GetForegroundWindow();
-		if (hwndForground != _srcInfo.Handle()) {
-			if (!Win32Helper::SetForegroundWindow(_srcInfo.Handle())) {
+		if (hwndForground != _srcTracker.Handle()) {
+			if (!Win32Helper::SetForegroundWindow(_srcTracker.Handle())) {
 				// 设置前台窗口失败，可能是因为前台窗口是开始菜单
 				if (WindowHelper::IsStartMenu(hwndForground)) {
 					using namespace std::chrono;
@@ -507,15 +522,16 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 						Sleep(1);
 					}
 
-					SetForegroundWindow(_srcInfo.Handle());
+					SetForegroundWindow(_srcTracker.Handle());
 				}
 			}
 		}
+
 		break;
 	}
 	case WM_NCACTIVATE:
 	{
-		wParam = _srcInfo.IsFocused();
+		wParam = _srcTracker.IsFocused();
 		break;
 	}
 	case WM_MOUSEACTIVATE:
@@ -528,8 +544,8 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	// WM_SIZING: 在用户调整尺寸时确保等比例以及限制最小和最大尺寸。
 	// ↓
 	// WM_WINDOWPOSCHANGING: 也要确保等比例，因为被第三方程序使用 SetWindowPos 修改
-	// 尺寸时不会收到 WM_SIZING。不做其他操作，因为第三方程序指定了 SWP_NOSENDCHANGING
-	// 标志时我们不会收到 WM_WINDOWPOSCHANGING。
+	// 尺寸时不会收到 WM_SIZING。如果第三方程序指定了 SWP_NOSENDCHANGING 标志我们
+	// 不会收到 WM_WINDOWPOSCHANGING。
 	// ↓
 	// WM_NCCALCSIZE: 更新数据和渲染器矩形，这使得调整大小的过程中不会出现闪烁。如果需
 	// 要，在这里移除原生标题栏。
@@ -580,40 +596,48 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 
 		// 如果全屏模式缩放包含 WS_MAXIMIZE 样式，创建窗口时将收到 WM_WINDOWPOSCHANGING，
 		// 应该忽略。
-		if (!_renderer || (windowPos.flags & SWP_NOSIZE)) {
+		if (!_renderer || (windowPos.flags & (SWP_NOSIZE | SWP_NOMOVE)) == (SWP_NOSIZE | SWP_NOMOVE)) {
 			return 0;
 		}
 
-		if (_options.IsWindowedMode()) {
-			// 用户调整尺寸时 WM_SIZING 已经确保等比例
-			if (!_isResizingOrMoving) {
-				// cx 不为 0 时使用 cx 计算，否则使用 cy 计算
-				if (windowPos.cx == 0) {
-					if (windowPos.cy == 0) {
-						// cx 和 cy 都为 0 则使用最小尺寸
-						windowPos.cx = 1;
+		if (!(windowPos.flags & SWP_NOSIZE)) {
+			if (_options.IsWindowedMode()) {
+				// 用户调整尺寸时 WM_SIZING 已经确保等比例
+				if (!_isResizingOrMoving) {
+					// cx 不为 0 时使用 cx 计算，否则使用 cy 计算
+					if (windowPos.cx == 0) {
+						if (windowPos.cy == 0) {
+							// cx 和 cy 都为 0 则使用最小尺寸
+							windowPos.cx = 1;
+						}
+					} else {
+						windowPos.cy = 0;
 					}
-				} else {
-					windowPos.cy = 0;
-				}
 
-				if (!_CalcWindowedScalingWindowSize(windowPos.cx, windowPos.cy, false)) {
-					return 0;
+					if (!_CalcWindowedScalingWindowSize(windowPos.cx, windowPos.cy, false)) {
+						return 0;
+					}
 				}
+			} else {
+				// 全屏模式缩放无需保持比例，但要限制最小和最大尺寸
+				const RECT& srcFrameRect = _srcTracker.WindowFrameRect();
+				const int spaceAround = (int)lroundf(WINDOWED_MODE_MIN_SPACE_AROUND *
+					_currentDpi / float(USER_DEFAULT_SCREEN_DPI));
+				const int minWidth = srcFrameRect.right - srcFrameRect.left + spaceAround;
+				const int minHeight = srcFrameRect.bottom - srcFrameRect.top + spaceAround;
+				const int maxWidth = GetSystemMetricsForDpi(SM_CXMAXTRACK, _currentDpi);
+				const int maxHeight = GetSystemMetricsForDpi(SM_CYMAXTRACK, _currentDpi);
+
+				windowPos.cx = std::clamp(windowPos.cx, minWidth, maxWidth);
+				windowPos.cy = std::clamp(windowPos.cy, minHeight, maxHeight);
 			}
-		} else {
-			// 全屏模式缩放无需保持比例，但要限制最小和最大尺寸
-			const RECT& srcFrameRect = _srcInfo.WindowFrameRect();
-			const int spaceAround = (int)lroundf(WINDOWED_MODE_MIN_SPACE_AROUND *
-				_currentDpi / float(USER_DEFAULT_SCREEN_DPI));
-			const int minWidth = srcFrameRect.right - srcFrameRect.left + spaceAround;
-			const int minHeight = srcFrameRect.bottom - srcFrameRect.top + spaceAround;
-			const int maxWidth = GetSystemMetricsForDpi(SM_CXMAXTRACK, _currentDpi);
-			const int maxHeight = GetSystemMetricsForDpi(SM_CYMAXTRACK, _currentDpi);
-
-			windowPos.cx = std::clamp(windowPos.cx, minWidth, maxWidth);
-			windowPos.cy = std::clamp(windowPos.cy, minHeight, maxHeight);
 		}
+		
+		// 在这里更新窗口矩形和渲染器矩形可以减少闪烁，和 WM_NCCALCSIZE 的目的类似。
+		// 由于 WM_WINDOWPOSCHANGING 消息是可选的，仍应在 WM_WINDOWPOSCHANGED 中
+		// 执行相同的操作。
+		_UpdateWindowRectFromWindowPos(windowPos);
+		_UpdateRendererRect();
 
 		return 0;
 	}
@@ -657,7 +681,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 			// 焦点。进行下面的操作：调整缩放窗口尺寸，打开开始菜单然后关闭，缩放窗口便
 			// 得到焦点了。这应该是 OS 的 bug，下面的代码用于规避它。
 			if (!(windowPos.flags & SWP_NOACTIVATE)) {
-				Win32Helper::SetForegroundWindow(_srcInfo.Handle());
+				Win32Helper::SetForegroundWindow(_srcTracker.Handle());
 			}
 		}
 
@@ -665,26 +689,8 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 			return 0;
 		}
 
-		// 此时 WINDOWPOS 似乎始终包含完整坐标，和 WM_WINDOWPOSCHANGING 不一样。
-		// 但保险起见只使用保证有效的成员。
-		if (windowPos.flags & SWP_NOSIZE) {
-			const LONG offsetX = windowPos.x - _windowRect.left;
-			const LONG offsetY = windowPos.y - _windowRect.top;
-			_windowRect.left = windowPos.x;
-			_windowRect.top = windowPos.y;
-			_windowRect.right += offsetX;
-			_windowRect.bottom += offsetY;
-		} else if (windowPos.flags & SWP_NOMOVE) {
-			_windowRect.right = _windowRect.left + windowPos.cx;
-			_windowRect.bottom = _windowRect.top + windowPos.cy;
-		} else {
-			_windowRect.left = windowPos.x;
-			_windowRect.top = windowPos.y;
-			_windowRect.right = windowPos.x + windowPos.cx;
-			_windowRect.bottom = windowPos.y + windowPos.cy;
-		}
-
-		// 也要更新渲染器矩形，因为移动时不会收到 WM_NCCALCSIZE
+		// 更新窗口矩形和渲染器矩形，因为 WM_NCCALCSIZE 和 WM_WINDOWPOSCHANGING 都是可选的
+		_UpdateWindowRectFromWindowPos(windowPos);
 		_UpdateRendererRect();
 
 		_RepostionBorderHelperWindows();
@@ -707,14 +713,19 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	}
 	case WM_SYSCOMMAND:
 	{
-		if ((wParam & 0xFFF0) == SC_SIZE) {
-			Win32Helper::SetForegroundWindow(_srcInfo.Handle());
+		// 使用 WM_SYSCOMMAND 区分接下来的 WM_ENTERSIZEMOVE 是调整大小还是移动
+		_isPreparingForResizing = (wParam & 0xFFF0) == SC_SIZE;
+		if (_isPreparingForResizing) {
+			Win32Helper::SetForegroundWindow(_srcTracker.Handle());
 		}
 		break;
 	}
 	case WM_DESTROY:
 	{
 		Logger::Get().Info("缩放结束");
+
+		// 更新 _runId 表明当前缩放结束
+		++_runId;
 
 		if (_exclModeMutex) {
 			_exclModeMutex.ReleaseMutex();
@@ -730,7 +741,6 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 
 		// 如果正在源窗口正在调整，暂时不清理这些成员
 		if (!_isSrcRepositioning) {
-			_dispatcher = nullptr;
 			// 缩放结束时保存配置
 			_options.save(_options, NULL);
 			_options = {};
@@ -784,11 +794,11 @@ LRESULT ScalingWindow::_RendererWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPAR
 bool ScalingWindow::_CalcWindowedScalingWindowSize(int& width, int& height, bool isRendererSize) const noexcept {
 	assert((width == 0) != (height == 0));
 
-	const RECT& srcRect = _srcInfo.SrcRect();
+	const RECT& srcRect = _srcTracker.SrcRect();
 	const float srcAspectRatio = float(srcRect.bottom - srcRect.top) / (srcRect.right - srcRect.left);
 
 	// 计算最小尺寸时使用源窗口包含窗口框架的矩形而不是被缩放区域
-	const RECT& srcFrameRect = _srcInfo.WindowFrameRect();
+	const RECT& srcFrameRect = _srcTracker.WindowFrameRect();
 	const int spaceAround = (int)lroundf(WINDOWED_MODE_MIN_SPACE_AROUND *
 		_currentDpi / float(USER_DEFAULT_SCREEN_DPI));
 	const int minRendererWidth = srcFrameRect.right - srcFrameRect.left + spaceAround;
@@ -903,9 +913,9 @@ ScalingError ScalingWindow::_CalcFullscreenRendererRect(uint32_t& monitorCount) 
 	// 使用源窗口跨越的所有显示器
 	case MultiMonitorUsage::Intersected:
 	{
-		if (_srcInfo.IsZoomed()) {
+		if (_srcTracker.IsZoomed()) {
 			// 最大化的窗口不能跨越屏幕
-			HMONITOR hMon = MonitorFromWindow(_srcInfo.Handle(), MONITOR_DEFAULTTONULL);
+			HMONITOR hMon = MonitorFromWindow(_srcTracker.Handle(), MONITOR_DEFAULTTONULL);
 			MONITORINFO mi{ .cbSize = sizeof(mi) };
 			if (!GetMonitorInfo(hMon, &mi)) {
 				Logger::Get().Win32Error("GetMonitorInfo 失败");
@@ -925,7 +935,7 @@ ScalingError ScalingWindow::_CalcFullscreenRendererRect(uint32_t& monitorCount) 
 		} param{};
 
 		// 使用窗口框架矩形来计算和哪些屏幕相交，而不是被缩放区域
-		if (!Win32Helper::GetWindowFrameRect(_srcInfo.Handle(), param.srcRect)) {
+		if (!Win32Helper::GetWindowFrameRect(_srcTracker.Handle(), param.srcRect)) {
 			Logger::Get().Error("GetWindowFrameRect 失败");
 			return ScalingError::ScalingFailedGeneral;
 		}
@@ -978,7 +988,7 @@ ScalingError ScalingWindow::_CalcFullscreenRendererRect(uint32_t& monitorCount) 
 }
 
 ScalingError ScalingWindow::_InitialMoveSrcWindowInFullscreen() noexcept {
-	HMONITOR hMonitor = MonitorFromWindow(_srcInfo.Handle(), MONITOR_DEFAULTTONULL);
+	HMONITOR hMonitor = MonitorFromWindow(_srcTracker.Handle(), MONITOR_DEFAULTTONULL);
 	assert(hMonitor);
 
 	MONITORINFO mi{ .cbSize = sizeof(mi) };
@@ -991,11 +1001,11 @@ ScalingError ScalingWindow::_InitialMoveSrcWindowInFullscreen() noexcept {
 		_rendererRect = mi.rcMonitor;
 	}
 
-	if (_srcInfo.IsZoomed()) {
+	if (_srcTracker.IsZoomed()) {
 		return ScalingError::NoError;
 	}
 
-	const RECT& srcRect = _srcInfo.SrcRect();
+	const RECT& srcRect = _srcTracker.SrcRect();
 	const SIZE srcSize = Win32Helper::GetSizeOfRect(srcRect);
 	const SIZE monitorSize = Win32Helper::GetSizeOfRect(mi.rcMonitor);
 
@@ -1029,7 +1039,9 @@ ScalingError ScalingWindow::_InitialMoveSrcWindowInFullscreen() noexcept {
 		// 不要跨屏幕移动，否则如果 DPI 缩放不同会造成源窗口尺寸改变
 		int offsetX = mi.rcMonitor.left + (monitorSize.cx - srcSize.cx) / 2 - srcRect.left;
 		int offsetY = mi.rcMonitor.top + (monitorSize.cy - srcSize.cy) / 2 - srcRect.top;
-		_MoveSrcWindow(offsetX, offsetY);
+		if (!_srcTracker.Move(offsetX, offsetY)) {
+			return ScalingError::InvalidSourceWindow;
+		}
 	}
 
 	return ScalingError::NoError;
@@ -1055,27 +1067,13 @@ void ScalingWindow::_Show() noexcept {
 	PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 1, (LPARAM)Handle());
 
 	if (_options.IsWindowedMode()) {
-		// 确保标题栏在屏幕内
-		HMONITOR hMon = MonitorFromWindow(Handle(), MONITOR_DEFAULTTONEAREST);
-		MONITORINFO mi{ .cbSize = sizeof(mi) };
-		if (GetMonitorInfo(hMon, &mi)) {
-			if (_windowRect.top < mi.rcMonitor.top) {
-				SetWindowPos(
-					Handle(),
-					NULL,
-					_windowRect.left, mi.rcMonitor.top, 0, 0,
-					SWP_NOACTIVATE | SWP_NOREDRAW | SWP_NOSIZE
-				);
-			}
-		} else {
-			Logger::Get().Win32Error("GetMonitorInfo 失败");
+		if (!_EnsureCaptionVisibleOnScreen()) {
+			_RepostionBorderHelperWindows();
 		}
-
-		_RepostionBorderHelperWindows();
 	}
 
 	// 如果源窗口位于前台则将缩放窗口置顶
-	if (_srcInfo.IsFocused()) {
+	if (_srcTracker.IsFocused()) {
 		_UpdateFocusState();
 	}
 
@@ -1095,50 +1093,49 @@ void ScalingWindow::_Show() noexcept {
 	if (_options.IsSimulateExclusiveFullscreen()) {
 		// 延迟 1s 以避免干扰游戏的初始化，见 #495
 		([]()->winrt::fire_and_forget {
-			ScalingWindow& that = ScalingWindow::Get();
-			const HWND hwndScaling = that.Handle();
-			winrt::DispatcherQueue dispatcher = that._dispatcher;
+			const uint32_t runId = RunId();
 
 			co_await 1s;
-			co_await dispatcher;
+			co_await Dispatcher();
 
-			if (that.Handle() != hwndScaling) {
+			if (RunId() != runId) {
 				co_return;
 			}
 
-			if (!that._exclModeMutex) {
-				that._exclModeMutex = ExclModeHelper::EnterExclMode();
+			if (!Get()._exclModeMutex) {
+				Get()._exclModeMutex = ExclModeHelper::EnterExclMode();
 			}
 		})();
 	};
 }
 
 void ScalingWindow::_ResizeRenderer() noexcept {
-	if (!_renderer->Resize()) {
+	if (!_renderer->OnResize()) {
 		Logger::Get().Error("更改 Renderer 尺寸失败");
 		return;
 	}
 
-	_cursorManager->UpdateAfterScalingWindowPosChanged();
-
+	_cursorManager->OnScalingPosChanged();
 	Render();
 }
 
 void ScalingWindow::_MoveRenderer() noexcept {
-	_renderer->Move();
-	_cursorManager->UpdateAfterScalingWindowPosChanged();
+	_renderer->OnMove();
 
-	Render();
+	if (!_isMovingDueToSrcMoved) {
+		_cursorManager->OnScalingPosChanged();
+		Render();
+	}
 }
 
-bool ScalingWindow::_CheckSrcState() noexcept {
+bool ScalingWindow::_UpdateSrcState() noexcept {
 	HWND hwndFore = GetForegroundWindow();
 
 	if (hwndFore == Handle()) {
 		// 缩放窗口不应该得到焦点，我们通过 WS_EX_NOACTIVATE 样式和处理 WM_MOUSEACTIVATE
 		// 等消息来做到这一点。但如果由于某种我们尚未了解的机制这些手段都失败了，这里
 		// 进行纠正。
-		Win32Helper::SetForegroundWindow(_srcInfo.Handle());
+		Win32Helper::SetForegroundWindow(_srcTracker.Handle());
 		hwndFore = GetForegroundWindow();
 	}
 
@@ -1149,30 +1146,50 @@ bool ScalingWindow::_CheckSrcState() noexcept {
 
 	bool srcRectChanged = false;
 	bool srcSizeChanged = false;
-	if (!_srcInfo.UpdateState(hwndFore, _options.IsWindowedMode(), srcRectChanged, srcSizeChanged)) {
+	bool srcMovingChanged = false;
+	if (!_srcTracker.UpdateState(hwndFore,
+		_options.IsWindowedMode(), srcRectChanged, srcSizeChanged, srcMovingChanged)) {
 		return false;
 	}
 
-	if (!srcRectChanged) {
-		return true;
+	if (srcSizeChanged || (!_options.IsWindowedMode() && srcRectChanged)) {
+		_isSrcRepositioning = true;
+		return false;
 	}
 
-	if (_options.IsWindowedMode() && !srcSizeChanged) {
+	// DirectFlip 可能使窗口移动很卡，目前发现缩放 Magpie 主窗口有这个
+	// 问题。因此源窗口移动过程中临时禁用 DirectFlip。
+	if (srcMovingChanged) {
+		assert(_options.IsWindowedMode());
+
+		if (_srcTracker.IsMoving()) {
+			_cursorManager->OnSrcStartMove();
+		} else {
+			_cursorManager->OnSrcEndMove();
+			_EnsureCaptionVisibleOnScreen();
+		}
+	}
+
+	if (srcRectChanged) {
+		assert(_options.IsWindowedMode());
+
 		// 窗口模式缩放时允许源窗口移动
-		const RECT& srcRect = _srcInfo.WindowRect();
+		const RECT& srcRect = _srcTracker.WindowRect();
 		const LONG newLeft = (srcRect.left + srcRect.right + _windowRect.left - _windowRect.right) / 2;
 		const LONG newTop = (srcRect.top + srcRect.bottom + _windowRect.top - _windowRect.bottom) / 2;
-		SetWindowPos(Handle(), NULL, newLeft, newTop, 0, 0, SWP_NOACTIVATE | SWP_NOSIZE | SWP_NOZORDER);
-		return true;
+		// _srcTracker.IsMoving() 只能反应源窗口的持续拖拽
+		_isMovingDueToSrcMoved = true;
+		SetWindowPos(Handle(), NULL, newLeft, newTop, 0, 0,
+			SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOSIZE | SWP_NOSENDCHANGING);
+		_isMovingDueToSrcMoved = false;
 	}
-
-	_isSrcRepositioning = true;
-	return false;
+	
+	return true;
 }
 
 // 返回真表示应继续缩放
 bool ScalingWindow::_CheckForegroundFor3DGameMode(HWND hwndFore) const noexcept {
-	if (!hwndFore || hwndFore == _srcInfo.Handle()) {
+	if (!hwndFore || hwndFore == _srcTracker.Handle()) {
 		return true;
 	}
 
@@ -1200,7 +1217,7 @@ bool ScalingWindow::_CheckForegroundFor3DGameMode(HWND hwndFore) const noexcept 
 void ScalingWindow::_SetWindowProps() const noexcept {
 	const HWND hWnd = Handle();
 	SetProp(hWnd, L"Magpie.Windowed", (HANDLE)_options.IsWindowedMode());
-	SetProp(hWnd, L"Magpie.SrcHWND", _srcInfo.Handle());
+	SetProp(hWnd, L"Magpie.SrcHWND", _srcTracker.Handle());
 	
 	_UpdateWindowProps();
 }
@@ -1619,9 +1636,9 @@ void ScalingWindow::_UpdateFocusState() const noexcept {
 	if (_options.IsWindowedMode()) {
 		// 根据源窗口状态绘制非客户区，我们必须自己控制非客户区是绘制成焦点状态还是非焦点
 		// 状态，因为缩放窗口实际上永远不会得到焦点。
-		DefWindowProc(Handle(), WM_NCACTIVATE, _srcInfo.IsFocused(), 0);
+		DefWindowProc(Handle(), WM_NCACTIVATE, _srcTracker.IsFocused(), 0);
 
-		if (_srcInfo.IsFocused() && !_options.IsDebugMode()) {
+		if (_srcTracker.IsFocused() && !_options.IsDebugMode()) {
 			// 置顶然后取消置顶使缩放窗口在最前面。有些窗口（如微信）使用单独的窗口实现假
 			// 边框和阴影，缩放窗口应在它们前面。
 			SetWindowPos(Handle(), HWND_TOPMOST,
@@ -1632,7 +1649,7 @@ void ScalingWindow::_UpdateFocusState() const noexcept {
 	} else {
 		if (!_options.IsDebugMode()) {
 			// 源窗口位于前台时将缩放窗口置顶，这使不支持 MPO 的显卡更容易激活 DirectFlip
-			if (_srcInfo.IsFocused()) {
+			if (_srcTracker.IsFocused()) {
 				SetWindowPos(Handle(), HWND_TOPMOST,
 					0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
 				// 再次调用 SetWindowPos 确保缩放窗口在所有置顶窗口之上
@@ -1645,7 +1662,7 @@ void ScalingWindow::_UpdateFocusState() const noexcept {
 		}
 	}
 
-	if (_srcInfo.IsFocused()) {
+	if (_srcTracker.IsFocused()) {
 		PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 1, (LPARAM)Handle());
 	} else {
 		// lParam 传 1 表示转到后台而非结束缩放
@@ -1656,30 +1673,11 @@ void ScalingWindow::_UpdateFocusState() const noexcept {
 bool ScalingWindow::_IsBorderless() const noexcept {
 	assert(_options.IsWindowedMode());
 
-	const SrcWindowKind srcWindowKind = _srcInfo.WindowKind();
+	const SrcWindowKind srcWindowKind = _srcTracker.WindowKind();
 	// NoBorder: Win11 中这类窗口有着特殊的边框，因此和 Win10 的处理方式相同。
 	// NoDecoration: Win11 中实现为无标题栏并隐藏边框。
 	return srcWindowKind == SrcWindowKind::NoBorder || 
 		(srcWindowKind == SrcWindowKind::NoDecoration && !Win32Helper::GetOSVersion().IsWin11());
-}
-
-void ScalingWindow::_MoveSrcWindow(int offsetX, int offsetY) noexcept {
-	if (offsetX == 0 && offsetY == 0) {
-		return;
-	}
-
-	const RECT& srcWindowRect = _srcInfo.WindowRect();
-	SetWindowPos(
-		_srcInfo.Handle(),
-		NULL,
-		srcWindowRect.left + offsetX,
-		srcWindowRect.top + offsetY,
-		0,
-		0,
-		SWP_NOACTIVATE | SWP_NOREDRAW | SWP_NOSIZE | SWP_NOZORDER
-	);
-
-	_srcInfo.UpdateAfterMoved(offsetX, offsetY);
 }
 
 void ScalingWindow::_UpdateRendererRect() noexcept {
@@ -1698,11 +1696,13 @@ void ScalingWindow::_UpdateRendererRect() noexcept {
 	const bool resized = Win32Helper::GetSizeOfRect(_rendererRect) !=
 		Win32Helper::GetSizeOfRect(oldRendererRect);
 
-	// 确保源窗口中心点和缩放窗口中心点相同。应先移动源窗口，因为之后需要调整光标位置
-	const RECT& srcRect = _srcInfo.WindowRect();
-	const int offsetX = (_windowRect.left + _windowRect.right - srcRect.left - srcRect.right) / 2;
-	const int offsetY = (_windowRect.top + _windowRect.bottom - srcRect.top - srcRect.bottom) / 2;
-	_MoveSrcWindow(offsetX, offsetY);
+	if (!_isMovingDueToSrcMoved) {
+		// 确保源窗口中心点和缩放窗口中心点相同。应先移动源窗口，因为之后需要调整光标位置
+		const RECT& srcRect = _srcTracker.WindowRect();
+		const int offsetX = (_windowRect.left + _windowRect.right - srcRect.left - srcRect.right) / 2;
+		const int offsetY = (_windowRect.top + _windowRect.bottom - srcRect.top - srcRect.bottom) / 2;
+		_srcTracker.Move(offsetX, offsetY);
+	}
 
 	if (_hwndRenderer == Handle()) {
 		if (resized) {
@@ -1723,6 +1723,78 @@ void ScalingWindow::_UpdateRendererRect() noexcept {
 			_rendererRect.bottom - _rendererRect.top,
 			SWP_NOACTIVATE | SWP_NOCOPYBITS | SWP_NOZORDER | (resized ? 0 : SWP_NOSIZE)
 		);
+	}
+}
+
+// OS 有类似的机制，但我们很少能触发，只能自己处理。参考自
+// https://github.com/tongzx/nt5src/blob/daad8a087a4e75422ec96b7911f1df4669989611/Source/XPSP1/NT/windows/core/ntuser/kernel/movesize.c#L592
+bool ScalingWindow::_EnsureCaptionVisibleOnScreen() noexcept {
+	struct EnumData {
+		RECT windowRect;
+		bool captionVisible;
+	} data{ _windowRect, false };
+
+	static const auto enumMonitorProc = [](HMONITOR hMon, HDC, LPRECT, LPARAM lParam) {
+		EnumData& data = *(EnumData*)lParam;
+
+		// 使用工作矩形而不是屏幕矩形
+		MONITORINFO mi{ .cbSize = sizeof(mi) };
+		if (!GetMonitorInfo(hMon, &mi)) {
+			return TRUE;
+		}
+
+		if (Win32Helper::IsRectOverlap(data.windowRect, mi.rcWork) && data.windowRect.top >= mi.rcWork.top) {
+			data.captionVisible = true;
+			return FALSE;
+		} else {
+			return TRUE;
+		}
+	};
+
+	EnumDisplayMonitors(NULL, NULL, enumMonitorProc, (LPARAM)&data);
+
+	if (data.captionVisible) {
+		return false;
+	}
+
+	// 调整位置使得标题栏可见
+	HMONITOR hMon = MonitorFromWindow(Handle(), MONITOR_DEFAULTTONEAREST);
+	MONITORINFO mi{ .cbSize = sizeof(mi) };
+	if (!GetMonitorInfo(hMon, &mi)) {
+		Logger::Get().Win32Error("GetMonitorInfo 失败");
+		return false;
+	}
+
+	// 为了避免光标位置跳跃应等待渲染而且不要使用 SWP_NOSENDCHANGING
+	_shouldWaitForRender = true;
+	bool result = SetWindowPos(
+		Handle(),
+		NULL,
+		_windowRect.left, mi.rcWork.top, 0, 0,
+		SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOREDRAW | SWP_NOSIZE
+	);
+	_shouldWaitForRender = false;
+	return result;
+}
+
+void ScalingWindow::_UpdateWindowRectFromWindowPos(const WINDOWPOS& windowPos) noexcept {
+	assert((windowPos.flags & (SWP_NOSIZE | SWP_NOMOVE)) != (SWP_NOSIZE | SWP_NOMOVE));
+
+	if (windowPos.flags & SWP_NOSIZE) {
+		const LONG offsetX = windowPos.x - _windowRect.left;
+		const LONG offsetY = windowPos.y - _windowRect.top;
+		_windowRect.left = windowPos.x;
+		_windowRect.top = windowPos.y;
+		_windowRect.right += offsetX;
+		_windowRect.bottom += offsetY;
+	} else if (windowPos.flags & SWP_NOMOVE) {
+		_windowRect.right = _windowRect.left + windowPos.cx;
+		_windowRect.bottom = _windowRect.top + windowPos.cy;
+	} else {
+		_windowRect.left = windowPos.x;
+		_windowRect.top = windowPos.y;
+		_windowRect.right = windowPos.x + windowPos.cx;
+		_windowRect.bottom = windowPos.y + windowPos.cy;
 	}
 }
 

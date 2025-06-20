@@ -18,9 +18,9 @@ public:
 
 	virtual void EndFrame(bool waitForRenderComplete = false) noexcept = 0;
 
-	virtual bool Resize() noexcept = 0;
+	virtual bool OnResize() noexcept = 0;
 
-	virtual void EndResize(bool& shouldRedraw) noexcept {
+	virtual void OnEndResize(bool& shouldRedraw) noexcept {
 		shouldRedraw = false;
 	}
 

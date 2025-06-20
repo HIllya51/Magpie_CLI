@@ -2,7 +2,7 @@
 #include "WindowBase.h"
 #include "ScalingOptions.h"
 #include "ScalingError.h"
-#include "SrcInfo.h"
+#include "SrcTracker.h"
 
 namespace Magpie {
 
@@ -18,11 +18,20 @@ public:
 		return instance;
 	}
 
-	ScalingError Create(
-		HWND hwndSrc,
-		winrt::DispatcherQueue dispatcher,
-		ScalingOptions options
-	) noexcept;
+	// 用于检查当前缩放是否结束
+	static uint32_t RunId() noexcept {
+		return _runId;
+	}
+
+	static void Dispatcher(const winrt::DispatcherQueue& value) noexcept {
+		_dispatcher = value;
+	}
+
+	static const winrt::DispatcherQueue& Dispatcher() noexcept {
+		return _dispatcher;
+	}
+
+	ScalingError Create(HWND hwndSrc, ScalingOptions options) noexcept;
 
 	void Render() noexcept;
 
@@ -36,8 +45,8 @@ public:
 		return _options;
 	}
 
-	SrcInfo& SrcInfo() noexcept {
-		return _srcInfo;
+	SrcTracker& SrcTracker() noexcept {
+		return _srcTracker;
 	}
 
 	class Renderer& Renderer() noexcept {
@@ -46,10 +55,6 @@ public:
 
 	CursorManager& CursorManager() noexcept {
 		return *_cursorManager;
-	}
-
-	const winrt::DispatcherQueue& Dispatcher() const noexcept {
-		return _dispatcher;
 	}
 
 	bool IsSrcRepositioning() const noexcept {
@@ -99,7 +104,7 @@ private:
 
 	void _Show() noexcept;
 
-	bool _CheckSrcState() noexcept;
+	bool _UpdateSrcState() noexcept;
 
 	bool _CheckForegroundFor3DGameMode(HWND hwndFore) const noexcept;
 
@@ -133,10 +138,13 @@ private:
 
 	bool _IsBorderless() const noexcept;
 
-	void _MoveSrcWindow(int offsetX, int offsetY) noexcept;
-
 	void _UpdateRendererRect() noexcept;
 
+	bool _EnsureCaptionVisibleOnScreen() noexcept;
+
+	void _UpdateWindowRectFromWindowPos(const WINDOWPOS& windowPos) noexcept;
+
+	static inline uint32_t _runId = 0;
 	static inline winrt::DispatcherQueue _dispatcher{ nullptr };
 
 	RECT _windowRect{};
@@ -152,7 +160,7 @@ private:
 	std::unique_ptr<class Renderer> _renderer;
 	std::unique_ptr<class CursorManager> _cursorManager;
 
-	class SrcInfo _srcInfo;
+	class SrcTracker _srcTracker;
 
 	winrt::ResourceLoader _resourceLoader{ nullptr };
 
@@ -166,6 +174,10 @@ private:
 	// 第一帧渲染完成后再显示
 	bool _isFirstFrame = false;
 	bool _isResizingOrMoving = false;
+	// 用于区分调整大小和移动
+	bool _isPreparingForResizing = false;
+	bool _isMovingDueToSrcMoved = false;
+	bool _shouldWaitForRender = false;
 	bool _isSrcRepositioning = false;
 };
 

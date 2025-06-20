@@ -66,7 +66,7 @@ bool ScalingRuntime::Start(HWND hwndSrc, ScalingOptions&& options) {
 	_Dispatcher().TryEnqueue([this, hwndSrc, options(std::move(options))]() mutable {
 		options.Log();
 
-		ScalingError error = ScalingWindow::Get().Create(hwndSrc, _dispatcher, std::move(options));
+		ScalingError error = ScalingWindow::Get().Create(hwndSrc, std::move(options));
 		if (error == ScalingError::NoError) {
 			_state.store(_State::Scaling, std::memory_order_relaxed);
 		} else {
@@ -123,9 +123,7 @@ static int GetSrcRepositionState(HWND hwndSrc, bool allowScalingMaximized) noexc
 	}
 
 	// 检查源窗口是否正在调整大小或移动
-	GUITHREADINFO guiThreadInfo{
-		.cbSize = sizeof(GUITHREADINFO)
-	};
+	GUITHREADINFO guiThreadInfo{ .cbSize = sizeof(GUITHREADINFO) };
 	if (!GetGUIThreadInfo(GetWindowThreadProcessId(hwndSrc, nullptr), &guiThreadInfo)) {
 		Logger::Get().Win32Error("GetGUIThreadInfo 失败");
 		return -1;
@@ -136,7 +134,7 @@ static int GetSrcRepositionState(HWND hwndSrc, bool allowScalingMaximized) noexc
 
 void ScalingRuntime::_ScalingThreadProc() noexcept {
 #ifdef _DEBUG
-	SetThreadDescription(GetCurrentThread(), L"[Magpie]缩放线程");
+	SetThreadDescription(GetCurrentThread(), L"Magpie-缩放线程");
 #endif
 
 	winrt::init_apartment(winrt::apartment_type::single_threaded);
@@ -162,6 +160,8 @@ void ScalingRuntime::_ScalingThreadProc() noexcept {
 	}
 
 	ScalingWindow& scalingWindow = ScalingWindow::Get();
+	ScalingWindow::Dispatcher(_dispatcher);
+
 	time_point<steady_clock> lastRenderTime;
 	const milliseconds timeout(scalingWindow.Options().Is3DGameMode() ? 8 : 2);
 
@@ -206,7 +206,7 @@ void ScalingRuntime::_ScalingThreadProc() noexcept {
 			MsgWaitForMultipleObjectsEx(0, nullptr, restMs, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
 		} else if (scalingWindow.IsSrcRepositioning()) {
 			const int state = GetSrcRepositionState(
-				scalingWindow.SrcInfo().Handle(),
+				scalingWindow.SrcTracker().Handle(),
 				scalingWindow.Options().IsAllowScalingMaximized()
 			);
 			if (state == 0) {

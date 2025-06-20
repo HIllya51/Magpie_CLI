@@ -695,6 +695,8 @@ bool OverlayDrawer::_DrawToolbar(uint32_t fps) noexcept {
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameRounding, 4 * _dpiScale);
 		ImGui::PushStyleVar(ImGuiStyleVar_FrameBorderSize, 0);
 		ImGui::PushStyleVar(ImGuiStyleVar_ItemSpacing, { 4 * _dpiScale, 0.0f });
+		// 禁用仅为阻止交互，不应有视觉改变
+		ImGui::PushStyleVar(ImGuiStyleVar_DisabledAlpha, 1.0f);
 		ImGui::PushStyleColor(ImGuiCol_Button, { 0,0,0,0 });
 		ImGui::PushStyleColor(ImGuiCol_ButtonHovered, { 0.118f, 0.533f, 0.894f, 1.0f });
 		ImGui::PushStyleColor(ImGuiCol_ButtonActive, { 0.118f, 0.533f, 0.894f, 0.8f });
@@ -737,6 +739,9 @@ bool OverlayDrawer::_DrawToolbar(uint32_t fps) noexcept {
 			}
 			return clicked;
 		};
+
+		// 光标不在缩放窗口上时阻止交互
+		ImGui::BeginDisabled(!ScalingWindow::Get().CursorManager().CursorHandle());
 
 		const std::string& pinStr = _GetResourceString(L"Overlay_Toolbar_Pin");
 		drawToggleButton(_isToolbarPinned, OverlayHelper::SegoeIcons::Pinned, pinStr.c_str());
@@ -831,7 +836,7 @@ bool OverlayDrawer::_DrawToolbar(uint32_t fps) noexcept {
 
 		const std::string& stopScalingStr = _GetResourceString(L"Overlay_Toolbar_StopScaling");
 		if (drawButton(OverlayHelper::SegoeIcons::BackToWindow, stopScalingStr.c_str())) {
-			ScalingWindow::Get().Dispatcher().TryEnqueue([]() {
+			ScalingWindow::Dispatcher().TryEnqueue([]() {
 				ScalingWindow::Get().Destroy();
 			});
 		}
@@ -840,16 +845,18 @@ bool OverlayDrawer::_DrawToolbar(uint32_t fps) noexcept {
 
 		const std::string& closeStr = _GetResourceString(L"Overlay_Toolbar_Close");
 		if (drawButton(OverlayHelper::SegoeIcons::Cancel, closeStr.c_str())) {
-			ScalingWindow::Get().Dispatcher().TryEnqueue([this]() {
-				if (ScalingWindow::Get()) {
+			ScalingWindow::Dispatcher().TryEnqueue([this, runId(ScalingWindow::RunId())]() {
+				if (runId == ScalingWindow::RunId()) {
 					ToolbarState(ToolbarState::Off);
 					ScalingWindow::Get().Renderer().Render(true);
 				}
 			});
 		}
 
+		ImGui::EndDisabled();
+
 		ImGui::PopStyleColor(5);
-		ImGui::PopStyleVar(4);
+		ImGui::PopStyleVar(5);
 	} else {
 		_isCursorOnCaptionArea = false;
 	}

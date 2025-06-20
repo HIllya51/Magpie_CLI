@@ -20,9 +20,9 @@ public:
 
 	void EndFrame(bool waitForRenderComplete = false) noexcept override;
 
-	bool Resize() noexcept override;
+	bool OnResize() noexcept override;
 
-	void EndResize(bool& shouldRedraw) noexcept override;
+	void OnEndResize(bool& shouldRedraw) noexcept override;
 
 private:
 	bool _ResizeSwapChain() noexcept;

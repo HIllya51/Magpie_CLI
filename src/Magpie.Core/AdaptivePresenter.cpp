@@ -189,7 +189,7 @@ void AdaptivePresenter::EndFrame(bool waitForRenderComplete) noexcept {
 	}
 }
 
-bool AdaptivePresenter::Resize() noexcept {
+bool AdaptivePresenter::OnResize() noexcept {
 	_isResized = true;
 
 	if (ScalingWindow::Get().IsResizingOrMoving() || !_dxgiSwapChain) {
@@ -214,7 +214,7 @@ bool AdaptivePresenter::Resize() noexcept {
 	return true;
 }
 
-void AdaptivePresenter::EndResize(bool& shouldRedraw) noexcept {
+void AdaptivePresenter::OnEndResize(bool& shouldRedraw) noexcept {
 	if (!_dcompSurface || !_dxgiSwapChain) {
 		shouldRedraw = false;
 		return;
