@@ -20,7 +20,7 @@ public:
 
 	// 用于检查当前缩放是否结束
 	static uint32_t RunId() noexcept {
-		return _runId;
+		return _runId.load(std::memory_order_relaxed);
 	}
 
 	static void Dispatcher(const winrt::DispatcherQueue& value) noexcept {
@@ -94,11 +94,13 @@ private:
 	// 确保渲染窗口长宽比不变，且限制最小和最大尺寸。必须提供 width 和 height 之一，另一个
 	// 应为 0。如果 isRendererSize 为真，传入的 width 和 height 为渲染矩形尺寸，否则为缩
 	// 放窗口尺寸。返回时 width 和 height 是新的缩放窗口尺寸。
-	bool _CalcWindowedScalingWindowSize(int& width, int& height, bool isRendererSize) const noexcept;
+	bool _CalcWindowedScalingWindowSize(int& width, int& height, bool isRendererSize, uint32_t dpi = 0) const noexcept;
 
 	RECT _CalcWindowedRendererRect() const noexcept;
 
 	ScalingError _CalcFullscreenRendererRect(uint32_t& monitorCount) noexcept;
+
+	SIZE _AdjustFullscreenWindowSize(SIZE size, uint32_t dpi = 0) const noexcept;
 
 	ScalingError _InitialMoveSrcWindowInFullscreen() noexcept;
 
@@ -134,7 +136,7 @@ private:
 
 	void _UpdateFrameMargins() const noexcept;
 
-	void _UpdateFocusState() const noexcept;
+	winrt::fire_and_forget _UpdateFocusStateAsync(bool onShow = false) const noexcept;
 
 	bool _IsBorderless() const noexcept;
 
@@ -144,7 +146,9 @@ private:
 
 	void _UpdateWindowRectFromWindowPos(const WINDOWPOS& windowPos) noexcept;
 
-	static inline uint32_t _runId = 0;
+	void _DelayedDestroy(bool onSrcHung = false) const noexcept;
+
+	static inline std::atomic<uint32_t> _runId = 0;
 	static inline winrt::DispatcherQueue _dispatcher{ nullptr };
 
 	RECT _windowRect{};
@@ -178,6 +182,7 @@ private:
 	bool _isPreparingForResizing = false;
 	bool _isMovingDueToSrcMoved = false;
 	bool _shouldWaitForRender = false;
+	bool _areResizeHelperWindowsVisible = false;
 	bool _isSrcRepositioning = false;
 };
 
