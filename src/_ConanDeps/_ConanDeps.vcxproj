@@ -81,6 +81,6 @@ ConanFile = conanFiles.ToArray();
     </PropertyGroup>
 
     <!-- 批量处理 _OutOfDateConanFile 中的元素 -->
-    <Exec Condition="'@(_OutOfDateConanFile)' != ''" Command="conan install &quot;%(_OutOfDateConanFile.FullPath)&quot; -pr:a=conanprofile.txt --output-folder $(IntDir)%(_OutOfDateConanFile.ProjectName) -s build_type=$(Configuration) -s arch=$(ConanInstallArch) --build=missing --no-remote --update -c tools.info.package_id:confs=['tools.build:cxxflags']" />
+    <Exec Condition="'@(_OutOfDateConanFile)' != ''" Command="conan install &quot;%(_OutOfDateConanFile.FullPath)&quot; -pr:a=conanprofile.txt --output-folder $(IntDir)%(_OutOfDateConanFile.ProjectName) -s build_type=$(Configuration) -s arch=$(ConanInstallArch) --build=missing --update -c tools.info.package_id:confs=['tools.build:cxxflags']" />
   </Target>
 </Project>
