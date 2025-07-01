@@ -14,6 +14,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{00AB63C3-0CD3-4944-B8E6-58C86138618D}"
 	ProjectSection(SolutionItems) = preProject
 		.editorconfig = .editorconfig
+		src\BuildOptions.props = src\BuildOptions.props
 		src\Common.Post.props = src\Common.Post.props
 		src\Common.Pre.props = src\Common.Pre.props
 		Directory.Build.props = Directory.Build.props
@@ -38,8 +39,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Natvis", "Natvis", "{9808D3
 	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Updater", "src\Updater\Updater.vcxproj", "{E82B7A20-0557-4DC1-B418-87977D7450A4}"
+	ProjectSection(ProjectDependencies) = postProject
+		{456CCAE4-2C51-4CF2-8D3A-1EFCE8C41A2D} = {456CCAE4-2C51-4CF2-8D3A-1EFCE8C41A2D}
+	EndProjectSection
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "TouchHelper", "src\TouchHelper\TouchHelper.vcxproj", "{05B51BB8-08CB-4907-884F-8E2AD6BF6052}"
+	ProjectSection(ProjectDependencies) = postProject
+		{456CCAE4-2C51-4CF2-8D3A-1EFCE8C41A2D} = {456CCAE4-2C51-4CF2-8D3A-1EFCE8C41A2D}
+	EndProjectSection
+EndProject
+Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "Shared", "src\Shared\Shared.vcxitems", "{AABDA3A3-7B23-4189-895B-F68A4C6B14C2}"
 EndProject
 Project("{8BC9CEB8-8B4A-11D0-8D11-00A0C91BC942}") = "CLI", "src\CLI\CLI.vcxproj", "{B3A690A5-EF8E-48FE-AE0A-75940FCE549D}"
 EndProject

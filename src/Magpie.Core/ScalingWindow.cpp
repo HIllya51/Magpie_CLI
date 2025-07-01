@@ -16,8 +16,9 @@
 namespace Magpie {
 
 static UINT WM_MAGPIE_SCALINGCHANGED;
-// 用于和 TouchHelper 交互
-static UINT WM_MAGPIE_TOUCHHELPER;
+
+// 窗口模式缩放时缩放窗口应遮挡源窗口和它的阴影，在四周留出 50 x DPI 缩放的空间
+static constexpr int WINDOWED_MODE_MIN_SPACE_AROUND = 2 * 50;
 
 // 窗口模式缩放时缩放窗口应遮挡源窗口和它的阴影，在四周留出 50 x DPI 缩放的空间
 static constexpr int WINDOWED_MODE_MIN_SPACE_AROUND = 2 * 50;
@@ -26,20 +27,13 @@ static void InitMessage() noexcept {
 	static Ignore _ = []() {
 		WM_MAGPIE_SCALINGCHANGED =
 			RegisterWindowMessage(CommonSharedConstants::WM_MAGPIE_SCALINGCHANGED);
-		WM_MAGPIE_TOUCHHELPER =
-			RegisterWindowMessage(CommonSharedConstants::WM_MAGPIE_TOUCHHELPER);
 
 		return Ignore();
 	}();
 }
 
-#if 0
 ScalingWindow::ScalingWindow() noexcept :
 	_resourceLoader(winrt::ResourceLoader::GetForViewIndependentUse(CommonSharedConstants::APP_RESOURCE_MAP_ID)) {}
-#else
-ScalingWindow::ScalingWindow() noexcept 
-	{}
-#endif
 
 ScalingWindow::~ScalingWindow() noexcept {}
 
@@ -81,8 +75,8 @@ ScalingError ScalingWindow::Create(HWND hwndSrc, ScalingOptions options) noexcep
 	}
 
 	Logger::Get().Info(fmt::format("缩放开始\n\t程序版本: {}\n\tOS 版本: {}\n\t管理员: {}",
-#ifdef MAGPIE_VERSION_TAG
-		STRING(MAGPIE_VERSION_TAG),
+#ifdef MP_VERSION_TAG
+		STRING(MP_VERSION_TAG),
 #else
 		"dev",
 #endif
@@ -359,10 +353,7 @@ void ScalingWindow::CleanAfterSrcRepositioned() noexcept {
 }
 
 winrt::hstring ScalingWindow::GetLocalizedString(std::wstring_view resName) const {
-	return winrt::hstring(resName);
-#if 0
 	return _resourceLoader.GetString(resName);
-#endif
 }
 
 LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) noexcept {
@@ -385,9 +376,140 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 		// https://github.com/dechamps/WindowInvestigator/issues/3
 		SetProp(Handle(), L"TreatAsDesktopFullscreen", (HANDLE)TRUE);
 
-		// TouchHelper 的权限可能比我们低
-		if (!ChangeWindowMessageFilterEx(Handle(), WM_MAGPIE_TOUCHHELPER, MSGFLT_ADD, nullptr)) {
-			Logger::Get().Win32Error("ChangeWindowMessageFilter 失败");
+		_currentDpi = GetDpiForWindow(Handle());
+
+		// 设置窗口不透明。不完全透明时可关闭 DirectFlip
+		if (!SetLayeredWindowAttributes(Handle(), 0, 255, LWA_ALPHA)) {
+			Logger::Get().Win32Error("SetLayeredWindowAttributes 失败");
+		}
+
+		if (_options.IsWindowedMode()) {
+			BOOL value = TRUE;
+			DwmSetWindowAttribute(Handle(), DWMWA_TRANSITIONS_FORCEDISABLED, &value, sizeof(value));
+
+			if (_IsBorderless()) {
+				// 保留窗口阴影
+				MARGINS margins{ 1,1,1,1 };
+				DwmExtendFrameIntoClientArea(Handle(), &margins);
+			}
+
+			if (_srcTracker.WindowKind() == SrcWindowKind::NoDecoration && Win32Helper::GetOSVersion().IsWin11()) {
+				// Win11 中禁用边框和圆角以模仿 NoDecoration 的样式
+				COLORREF color = DWMWA_COLOR_NONE;
+				DwmSetWindowAttribute(Handle(), DWMWA_BORDER_COLOR, &color, sizeof(color));
+
+				DWM_WINDOW_CORNER_PREFERENCE corner = DWMWCP_DONOTROUND;
+				DwmSetWindowAttribute(Handle(), DWMWA_WINDOW_CORNER_PREFERENCE, &corner, sizeof(corner));
+			}
+
+			_UpdateFrameMargins();
+
+			// 创建用于在窗口外调整尺寸的辅助窗口
+			_CreateBorderHelperWindows();
+		}
+
+		// 提高时钟精度，默认为 15.6ms。缩放结束时还原
+		timeBeginPeriod(1);
+		break;
+	}
+	case CommonSharedConstants::WM_FRONTEND_RENDER:
+	{
+		// 调整窗口大小时会进入 OS 的内部循环，我们的消息循环没有机会调用 Render。幸运的是
+		// 内部循环会正常分发消息，因此有必要在窗口过程中执行渲染以避免调整大小时渲染暂停。
+		Render();
+		return 0;
+	}
+	case WM_ENTERSIZEMOVE:
+	{
+		_isResizingOrMoving = true;
+		if (!_isPreparingForResizing) {
+			_cursorManager->OnStartMove();
+		}
+
+		if (_options.IsTouchSupportEnabled()) {
+			_UpdateTouchProps(_srcTracker.SrcRect());
+		}
+
+		// 广播用户开始调整缩放窗口大小或移动缩放窗口
+		PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 3, (LPARAM)Handle());
+		return 0;
+	}
+	case WM_EXITSIZEMOVE:
+	{
+		_isResizingOrMoving = false;
+		_renderer->OnEndResize();
+		_cursorManager->OnEndResizeMove();
+
+		if (!_srcTracker.MoveOnEndResizeMove()) {
+			Logger::Get().Error("SrcTracker::MoveOnEndResizeMove 失败");
+			_DelayedDestroy();
+			return 0;
+		}
+
+		_cursorManager->OnSrcRectChanged();
+
+		if (_options.IsTouchSupportEnabled()) {
+			_UpdateTouchProps(_srcTracker.SrcRect());
+		}
+
+		// 广播缩放窗口位置或大小改变
+		PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 2, (LPARAM)Handle());
+		return 0;
+	}
+	case WM_GETDPISCALEDSIZE:
+	{
+		// DPI 改变时保持渲染尺寸保持不变
+		const uint32_t newDpi = (uint32_t)wParam;
+		SIZE& newSize = *(SIZE*)lParam;
+
+		if (_options.IsWindowedMode()) {
+			// 边框宽度变化会导致窗口尺寸变化
+			int width = _rendererRect.right - _rendererRect.left;
+			int height = 0;
+			if (_CalcWindowedScalingWindowSize(width, height, true, newDpi)) {
+				newSize = SIZE{ width, height };
+			} else {
+				Logger::Get().Error("_CalcWindowedScalingWindowSize 失败");
+				_DelayedDestroy();
+			}
+		} else {
+			newSize = _AdjustFullscreenWindowSize(
+				Win32Helper::GetSizeOfRect(_windowRect), newDpi);
+		}
+		
+		return TRUE;
+	}
+	case WM_DPICHANGED:
+	{
+		_currentDpi = HIWORD(wParam);
+
+		RECT* newRect = (RECT*)lParam;
+		SetWindowPos(
+			Handle(),
+			NULL,
+			newRect->left,
+			newRect->top,
+			newRect->right - newRect->left,
+			newRect->bottom - newRect->top,
+			SWP_NOZORDER | SWP_NOACTIVATE
+		);
+
+		return 0;
+	}
+	case WM_NCHITTEST:
+	{
+		if (!_options.IsWindowedMode()) {
+			break;
+		}
+
+		// 鼠标在叠加层工具栏上时可以拖动缩放窗口
+		if (_renderer->IsCursorOnOverlayCaptionArea()) {
+			return HTCAPTION;
+		}
+
+		const int16_t srcHitTest = _cursorManager->SrcHitTest();
+		if (srcHitTest != HTNOWHERE) {
+			return srcHitTest;
 		}
 
 		_currentDpi = GetDpiForWindow(Handle());
@@ -531,7 +653,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 		// 这时鼠标点击将激活源窗口
 		const HWND hwndForground = GetForegroundWindow();
 		if (hwndForground != _srcTracker.Handle()) {
-			if (!Win32Helper::SetForegroundWindow(_srcTracker.Handle())) {
+			if (!SetForegroundWindow(_srcTracker.Handle())) {
 				// 设置前台窗口失败，可能是因为前台窗口是开始菜单
 				if (WindowHelper::IsStartMenu(hwndForground)) {
 					using namespace std::chrono;
@@ -730,7 +852,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 			// 焦点。进行下面的操作：调整缩放窗口尺寸，打开开始菜单然后关闭，缩放窗口便
 			// 得到焦点了。这应该是 OS 的 bug，下面的代码用于规避它。
 			if (!(windowPos.flags & SWP_NOACTIVATE)) {
-				Win32Helper::SetForegroundWindow(_srcTracker.Handle());
+				SetForegroundWindow(_srcTracker.Handle());
 			}
 		}
 
@@ -774,7 +896,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 		// 使用 WM_SYSCOMMAND 区分接下来的 WM_ENTERSIZEMOVE 是调整大小还是移动
 		_isPreparingForResizing = (wParam & 0xFFF0) == SC_SIZE;
 		if (_isPreparingForResizing) {
-			Win32Helper::SetForegroundWindow(_srcTracker.Handle());
+			SetForegroundWindow(_srcTracker.Handle());
 		}
 		break;
 	}
@@ -816,22 +938,8 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 		PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 0, 0);
 		break;
 	}
-	default:
-	{
-		if (msg == WM_MAGPIE_TOUCHHELPER) {
-			if (wParam == 1) {
-				// 记录 TouchHelper 的结果
-				if (lParam == 0) {
-					Logger::Get().Info("触控输入变换设置成功");
-				} else {
-					Logger::Get().Error(fmt::format("触控输入变换设置失败\n\tLastErrorCode: {}", lParam));
-				}
-			}
+	}
 
-			return 0;
-		}
-	}
-	}
 	return base_type::_MessageHandler(msg, wParam, lParam);
 }
 
@@ -1226,7 +1334,7 @@ bool ScalingWindow::_UpdateSrcState() noexcept {
 		// 缩放窗口不应该得到焦点，我们通过 WS_EX_NOACTIVATE 样式和处理 WM_MOUSEACTIVATE
 		// 等消息来做到这一点。但如果由于某种我们尚未了解的机制这些手段都失败了，这里
 		// 进行纠正。
-		Win32Helper::SetForegroundWindow(_srcTracker.Handle());
+		SetForegroundWindow(_srcTracker.Handle());
 		hwndFore = GetForegroundWindow();
 	}
 
@@ -1258,6 +1366,10 @@ bool ScalingWindow::_UpdateSrcState() noexcept {
 		} else {
 			_cursorManager->OnSrcEndMove();
 			_EnsureCaptionVisibleOnScreen();
+		}
+
+		if (_options.IsTouchSupportEnabled()) {
+			_UpdateTouchProps(_srcTracker.SrcRect());
 		}
 
 		// 广播用户开始或结束移动缩放窗口
@@ -1337,17 +1449,59 @@ void ScalingWindow::_UpdateWindowProps() const noexcept {
 
 // 供 TouchHelper.exe 使用
 void ScalingWindow::_UpdateTouchProps(const RECT& srcRect) const noexcept {
+	assert(_options.IsTouchSupportEnabled());
+
 	const HWND hWnd = Handle();
 
-	SetProp(hWnd, L"Magpie.SrcTouchLeft", (HANDLE)(INT_PTR)srcRect.left);
-	SetProp(hWnd, L"Magpie.SrcTouchTop", (HANDLE)(INT_PTR)srcRect.top);
-	SetProp(hWnd, L"Magpie.SrcTouchRight", (HANDLE)(INT_PTR)srcRect.right);
-	SetProp(hWnd, L"Magpie.SrcTouchBottom", (HANDLE)(INT_PTR)srcRect.bottom);
+	if (_isResizingOrMoving) {
+		// 调整大小时应禁用触控变换
+		SetProp(hWnd, L"Magpie.SrcTouchLeft",
+			(HANDLE)(INT_PTR)std::numeric_limits<LONG>::min());
+		return;
+	}
+	
+	RECT srcTouchRect = srcRect;
+	RECT destTouchRect = _rendererRect;
 
-	SetProp(hWnd, L"Magpie.DestTouchLeft", (HANDLE)(INT_PTR)_rendererRect.left);
-	SetProp(hWnd, L"Magpie.DestTouchTop", (HANDLE)(INT_PTR)_rendererRect.top);
-	SetProp(hWnd, L"Magpie.DestTouchRight", (HANDLE)(INT_PTR)_rendererRect.right);
-	SetProp(hWnd, L"Magpie.DestTouchBottom", (HANDLE)(INT_PTR)_rendererRect.bottom);
+	// 拖动源窗口时将源矩形和目标矩形都尽可能放大
+	if (_srcTracker.IsMoving()) {
+		assert(srcRect == _srcTracker.SrcRect());
+
+		// 测试发现 MagSetInputTransform 存在坐标限制，太大的值是无效的
+		static constexpr int MIN_COORD = -20000;
+		static constexpr int MAX_COORD = 20000;
+
+		// 计算四个方向中的最小放大倍数
+		double destCenterX = (_rendererRect.left + _rendererRect.right) / 2.0;
+		double destCenterY = (_rendererRect.top + _rendererRect.bottom) / 2.0;
+		double factorLeft = (destCenterX - MIN_COORD) / (destCenterX - _rendererRect.left);
+		double factorTop = (destCenterY - MIN_COORD) / (destCenterY - _rendererRect.top);
+		double factorRight = (MAX_COORD - destCenterX) / (_rendererRect.right - destCenterX);
+		double factorBottom = (MAX_COORD - destCenterY) / (_rendererRect.bottom - destCenterY);
+		double minFactor = std::min(std::min(factorLeft, factorTop), std::min(factorRight, factorBottom));
+
+		double srcCenterX = (srcRect.left + srcRect.right) / 2.0;
+		double srcCenterY = (srcRect.top + srcRect.bottom) / 2.0;
+		srcTouchRect.left = std::lround(srcCenterX - (srcCenterX - srcRect.left) * minFactor);
+		srcTouchRect.top = std::lround(srcCenterY - (srcCenterY - srcRect.top) * minFactor);
+		srcTouchRect.right = std::lround(srcCenterX + (srcRect.right - srcCenterX) * minFactor);
+		srcTouchRect.bottom = std::lround(srcCenterY + (srcRect.bottom - srcCenterY) * minFactor);
+
+		destTouchRect.left = std::lround(destCenterX - (destCenterX - _rendererRect.left) * minFactor);
+		destTouchRect.top = std::lround(destCenterY - (destCenterY - _rendererRect.top) * minFactor);
+		destTouchRect.right = std::lround(destCenterX + (_rendererRect.right - destCenterX) * minFactor);
+		destTouchRect.bottom = std::lround(destCenterY + (_rendererRect.bottom - destCenterY) * minFactor);
+	}
+
+	SetProp(hWnd, L"Magpie.SrcTouchLeft", (HANDLE)(INT_PTR)srcTouchRect.left);
+	SetProp(hWnd, L"Magpie.SrcTouchTop", (HANDLE)(INT_PTR)srcTouchRect.top);
+	SetProp(hWnd, L"Magpie.SrcTouchRight", (HANDLE)(INT_PTR)srcTouchRect.right);
+	SetProp(hWnd, L"Magpie.SrcTouchBottom", (HANDLE)(INT_PTR)srcTouchRect.bottom);
+
+	SetProp(hWnd, L"Magpie.DestTouchLeft", (HANDLE)(INT_PTR)destTouchRect.left);
+	SetProp(hWnd, L"Magpie.DestTouchTop", (HANDLE)(INT_PTR)destTouchRect.top);
+	SetProp(hWnd, L"Magpie.DestTouchRight", (HANDLE)(INT_PTR)destTouchRect.right);
+	SetProp(hWnd, L"Magpie.DestTouchBottom", (HANDLE)(INT_PTR)destTouchRect.bottom);
 }
 
 // 文档要求窗口被销毁前清理所有属性，但实际上这不是必须的，见
@@ -1646,11 +1800,11 @@ RECT ScalingWindow::_CalcSrcTouchRect() const noexcept {
 void ScalingWindow::_UpdateTouchHoleWindows(bool onInit) noexcept {
 	if (_options.IsWindowedMode()) {
 		// 窗口模式缩放不存在黑边，因此不需要创建辅助窗口
-		_UpdateTouchProps(_renderer->SrcRect());
+		_UpdateTouchProps(_srcTracker.SrcRect());
 		return;
 	}
 
-	const RECT& srcRect = _renderer->SrcRect();
+	const RECT& srcRect = _srcTracker.SrcRect();
 	const RECT srcTouchRect = _CalcSrcTouchRect();
 	_UpdateTouchProps(srcTouchRect);
 
@@ -1799,7 +1953,7 @@ bool ScalingWindow::_IsBorderless() const noexcept {
 	// NoBorder: Win11 中这类窗口有着特殊的边框，因此和 Win10 的处理方式相同。
 	// NoDecoration: Win11 中实现为无标题栏并隐藏边框。
 	return srcWindowKind == SrcWindowKind::NoBorder || 
-		(srcWindowKind == SrcWindowKind::NoDecoration && !Win32Helper::GetOSVersion().IsWin11());
+		(srcWindowKind == SrcWindowKind::NoDecoration && Win32Helper::GetOSVersion().IsWin10());
 }
 
 void ScalingWindow::_UpdateRendererRect() noexcept {

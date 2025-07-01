@@ -1,4 +1,4 @@
-// Copyright (c) 2021 - present, Liu Xu
+// Copyright (c) Xu
 //
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -30,12 +30,12 @@ static void SetWorkingDir() noexcept {
 		Win32Helper::GetExePath().parent_path().c_str()));
 }
 
-static void InitializeLogger(const char* logFilePath) noexcept {
+static void InitializeLogger(const wchar_t* logFilePath) noexcept {
 	// 最多两个日志文件，每个最多 500KB
 	Logger::Get().Initialize(
 		spdlog::level::info,
 		logFilePath,
-		500000,
+		CommonSharedConstants::LOG_MAX_SIZE,
 		1
 	);
 }
@@ -74,8 +74,8 @@ int APIENTRY wWinMain(
 		CommonSharedConstants::REGISTER_TOUCH_HELPER_LOG_PATH);
 
 	Logger::Get().Info(fmt::format("程序启动\n\t版本: {}\n\tOS 版本: {}\n\t管理员: {}",
-#ifdef MAGPIE_VERSION_TAG
-		STRING(MAGPIE_VERSION_TAG),
+#ifdef MP_VERSION_TAG
+		STRING(MP_VERSION_TAG),
 #else
 		"dev",
 #endif

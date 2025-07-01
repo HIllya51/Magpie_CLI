@@ -74,16 +74,20 @@ struct Win32Helper {
 		constexpr OSVersion(uint32_t major, uint32_t minor, uint32_t patch)
 			: Version(major, minor, patch) {}
 
+		bool IsWin10() const noexcept {
+			return !IsWin11();
+		}
+
+		bool IsWin11() const noexcept {
+			return Is21H2OrNewer();
+		}
+
 		bool Is20H1OrNewer() const noexcept {
 			return *this >= Version(10, 0, 19041);
 		}
 
 		// 下面为 Win11
 		// 不考虑代号相同的 Win10
-
-		bool IsWin11() const noexcept {
-			return Is21H2OrNewer();
-		}
 
 		bool Is21H2OrNewer() const noexcept {
 			return *this >= Version(10, 0, 22000);
@@ -92,6 +96,10 @@ struct Win32Helper {
 		bool Is22H2OrNewer() const noexcept {
 			return *this >= Version(10, 0, 22621);
 		}
+
+		bool Is24H2OrNewer() const noexcept {
+			return *this >= Version(10, 0, 26100);
+		}
 	};
 
 	static const OSVersion& GetOSVersion() noexcept;
@@ -99,9 +107,6 @@ struct Win32Helper {
 	// 并行执行 times 次 func，并行失败时回退到单线程
 	// 执行完毕后返回
 	static void RunParallel(std::function<void(uint32_t)> func, uint32_t times) noexcept;
-
-	// 强制切换前台窗口
-	static bool SetForegroundWindow(HWND hWnd) noexcept;
 
 	// 获取 Virtual Key 的名字
 	static const std::wstring& GetKeyName(uint8_t key) noexcept;

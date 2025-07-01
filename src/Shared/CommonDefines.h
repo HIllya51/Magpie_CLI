@@ -1,3 +1,15 @@
+#pragma once
+
+using namespace std::string_literals;
+using namespace std::string_view_literals;
+using namespace std::chrono_literals;
+
+#ifdef WINRT_IMPL_COROUTINES
+// 导入 winrt 命名空间的 co_await 重载
+// https://devblogs.microsoft.com/oldnewthing/20191219-00/?p=103230
+using winrt::operator co_await;
+#endif
+
 #define DEFINE_FLAG_ACCESSOR(Name, FlagBit, FlagsVar) \
 	bool Name() const noexcept { return WI_IsFlagSet(FlagsVar, FlagBit); } \
 	void Name(bool value) noexcept { WI_UpdateFlag(FlagsVar, FlagBit, value); }
@@ -40,14 +52,3 @@ static uint32_t Measure(const Fn& func) noexcept {
 
 	return (uint32_t)dura.count();
 }
-
-// 这些宏用于实验或调试
-
-// 窗口模式缩放时把用于调整窗口尺寸的辅助窗口标示出来
-// #define MP_DEBUG_BORDER
-
-// 在性能分析器上显示调试信息
-// #define MP_DEBUG_OVERLAY
-
-// 使用 composition swapchain 呈现
-// #define MP_USE_COMPSWAPCHAIN
