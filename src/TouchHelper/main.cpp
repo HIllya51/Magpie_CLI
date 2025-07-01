@@ -26,10 +26,6 @@ static void InitializeLogger() noexcept {
 	if (len <= 0) {
 		return;
 	}
-}
-
-static void UpdateInputTransform() noexcept {
-	assert(hwndScaling);
 
 	logPath.resize(len);
 	if (!logPath.ends_with(L'\\')) {
