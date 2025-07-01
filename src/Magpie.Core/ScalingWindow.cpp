@@ -32,8 +32,13 @@ static void InitMessage() noexcept {
 	}();
 }
 
+#if 0
 ScalingWindow::ScalingWindow() noexcept :
 	_resourceLoader(winrt::ResourceLoader::GetForViewIndependentUse(CommonSharedConstants::APP_RESOURCE_MAP_ID)) {}
+#else
+ScalingWindow::ScalingWindow() noexcept 
+	{}
+#endif
 
 ScalingWindow::~ScalingWindow() noexcept {}
 
@@ -353,7 +358,10 @@ void ScalingWindow::CleanAfterSrcRepositioned() noexcept {
 }
 
 winrt::hstring ScalingWindow::GetLocalizedString(std::wstring_view resName) const {
+	return winrt::hstring(resName);
+#if 0
 	return _resourceLoader.GetString(resName);
+#endif
 }
 
 LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) noexcept {

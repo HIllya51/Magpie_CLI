@@ -355,7 +355,7 @@ static void SetWorkingDir() noexcept {
 
     FAIL_FAST_IF_WIN32_BOOL_FALSE(SetCurrentDirectory(path.c_str()));
 }
-static void InitializeLogger(const char* logFilePath) noexcept {
+static void InitializeLogger(const wchar_t* logFilePath) noexcept {
     Logger::Get().Initialize(
         spdlog::level::info,
         logFilePath,
