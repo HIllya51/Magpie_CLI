@@ -29,6 +29,17 @@ const auto WNDCLS_Magpie_Core_CLI_Message = L"WNDCLS_Magpie_Core_CLI_Message";
 static auto Magpie_Core_CLI_ToastMessage = RegisterWindowMessage(L"Magpie_Core_CLI_ToastMessage");
 static auto Magpie_Core_CLI_ScalingOptions_Save = RegisterWindowMessage(L"Magpie_Core_CLI_ScalingOptions_Save");
 
+enum class InitialWindowedScaleFactor {
+	Auto,
+	x1_25,
+	x1_5,
+	x1_75,
+	x2,
+	x3,
+	Custom,
+	COUNT
+};
+
 enum class CursorScaling
 {
     x0_5,
@@ -39,7 +50,36 @@ enum class CursorScaling
     x2,
     Source,
     Custom
-};
+}; 
+void solve_initialWindowedScaleFactor(ScalingOptions& options, InitialWindowedScaleFactor initialWindowedScaleFactor, float customInitialWindowedScaleFactor) {
+	switch (initialWindowedScaleFactor) {
+	case InitialWindowedScaleFactor::Auto:
+		options.initialWindowedScaleFactor = 0.0f;
+		break;
+	case InitialWindowedScaleFactor::x1_25:
+		options.initialWindowedScaleFactor = 1.25f;
+		break;
+	case InitialWindowedScaleFactor::x1_5:
+		options.initialWindowedScaleFactor = 1.5f;
+		break;
+	case InitialWindowedScaleFactor::x1_75:
+		options.initialWindowedScaleFactor = 1.5f;
+		break;
+	case InitialWindowedScaleFactor::x2:
+		options.initialWindowedScaleFactor = 2.0f;
+		break;
+	case InitialWindowedScaleFactor::x3:
+		options.initialWindowedScaleFactor = 3.0f;
+		break;
+	case InitialWindowedScaleFactor::Custom:
+		options.initialWindowedScaleFactor = customInitialWindowedScaleFactor;
+		break;
+	default:
+		options.initialWindowedScaleFactor = 0.0f;
+		break;
+	}
+}
+
 void solvecursorscale(ScalingOptions& options, CursorScaling cursorScaling, float customCursorScaling) {
 
     switch (cursorScaling) {
@@ -229,7 +269,7 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
     }
 
     solvecursorscale(options, profile["cursorScaling"], profile["customCursorScaling"]);
-
+	solve_initialWindowedScaleFactor(options, profile["initialWindowedScaleFactor"], profile["customInitialWindowedScaleFactor"]);
     // 应用全局配置
     options.IsDeveloperMode(config["developerMode"]);
     options.IsBenchmarkMode(config["benchmarkMode"]);
@@ -251,11 +291,14 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
     options.IsDirectFlipDisabled(profile["disableDirectFlip"]);
 
     LoadOverlayOptions(options, config["overlay"]);
-    options.showToast = [](HWND hwndTarget, std::wstring_view msg) {
+    options.showToast = [](HWND hwndTarget, std::wstring_view msg) noexcept {
         auto atom = GlobalAddAtom(std::wstring(msg).c_str());
         PostMessage(HWND_BROADCAST, Magpie_Core_CLI_ToastMessage, (WPARAM)atom, 0);
     };
-    options.save = [](const ScalingOptions& options, HWND /*hwndScaling*/) {
+	options.showError = [](HWND hWnd, ScalingError error) noexcept {
+		MessageBoxA(0, std::to_string((int)error).c_str(), "Error", 0);
+	};
+    options.save = [](const ScalingOptions& options, HWND /*hwndScaling*/) noexcept {
         auto atom = GlobalAddAtomA(SeriesOverlayOptions(options).c_str());
         PostMessage(HWND_BROADCAST, Magpie_Core_CLI_ScalingOptions_Save, (WPARAM)atom, 0);
     };
@@ -434,18 +477,19 @@ int WINAPI wWinMain(
         }
     });*/
     // Sleep(100);
-    auto magstart = [argv, &magrt](WPARAM wp, LPARAM lp, bool windowed = false) {
-        auto targethwnd = (HWND)lp;
-        auto config = nlohmann::json::parse(std::ifstream(argv[0]));
-        int profileindex = (int)wp;
-        auto options = LoadMagOptions(config, profileindex);
-        if (!options)return;
-        if (windowed) {
-            options.value().IsWindowedMode(true);
-            options.value().Is3DGameMode(false);
-        }
-        SetForegroundWindow(targethwnd);
-        magrt.Start(targethwnd, std::move(options.value())); };
+    auto magstart = [argv, &magrt](WPARAM wp, LPARAM lp, bool windowed = false) { 
+		auto targethwnd = (HWND)lp;
+		auto config = nlohmann::json::parse(std::ifstream(argv[0]));
+		int profileindex = (int)wp;
+		auto options = LoadMagOptions(config, profileindex);
+		if (!options)return;
+		if (windowed) {
+			options.value().IsWindowedMode(true);
+			options.value().Is3DGameMode(false);
+		}
+		SetForegroundWindow(targethwnd);
+		magrt.Start(targethwnd, std::move(options.value()));  
+	};
     _msgwindow.registmessage(Magpie_Core_CLI_Message_Start, magstart);
     _msgwindow.registmessage(Magpie_Core_CLI_Message_Start_WindowedMode, [&](WPARAM wp, LPARAM lp) {magstart(wp, lp, true); });
     _msgwindow.registmessage(Magpie_Core_CLI_Message_Stop, [&magrt]() { magrt.Stop(); });
