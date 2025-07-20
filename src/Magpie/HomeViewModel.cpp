@@ -23,8 +23,8 @@ namespace winrt::Magpie::implementation {
 HomeViewModel::HomeViewModel() {
 	ScalingService& ScalingService = ScalingService::Get();
 
-	_isRunningChangedRevoker = ScalingService.IsRunningChanged(
-		auto_revoke, std::bind_front(&HomeViewModel::_ScalingService_IsRunningChanged, this));
+	_isScalingChangedRevoker = ScalingService.IsScalingChanged(
+		auto_revoke, std::bind_front(&HomeViewModel::_ScalingService_IsScalingChanged, this));
 	_isTimerOnRevoker = ScalingService.IsTimerOnChanged(
 		auto_revoke, std::bind_front(&HomeViewModel::_ScalingService_IsTimerOnChanged, this));
 	_timerTickRevoker = ScalingService.TimerTick(
@@ -72,7 +72,7 @@ hstring HomeViewModel::TimerButtonText() const noexcept {
 }
 
 bool HomeViewModel::IsNotRunning() const noexcept {
-	return !ScalingService::Get().IsRunning();
+	return !ScalingService::Get().IsScaling();
 }
 
 void HomeViewModel::ToggleTimer() const noexcept {
@@ -326,7 +326,7 @@ int HomeViewModel::MinFrameRateIndex() const noexcept {
 }
 
 void HomeViewModel::MinFrameRateIndex(int value) {
-	if (value < 0 || value >= MIN_FRAME_RATE_OPTIONS.size()) {
+	if (value < 0 || value >= (int)MIN_FRAME_RATE_OPTIONS.size()) {
 		return;
 	}
 
@@ -516,7 +516,7 @@ void HomeViewModel::_ScalingService_TimerTick(double) {
 	RaisePropertyChanged(L"TimerLabelText");
 }
 
-void HomeViewModel::_ScalingService_IsRunningChanged(bool) {
+void HomeViewModel::_ScalingService_IsScalingChanged(bool) {
 	RaisePropertyChanged(L"IsNotRunning");
 }
 

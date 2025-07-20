@@ -21,7 +21,7 @@ static UINT WM_MAGPIE_SCALINGCHANGED;
 static constexpr int WINDOWED_MODE_MIN_SPACE_AROUND = 2 * 50;
 
 static void InitMessage() noexcept {
-	static Ignore _ = []() {
+	[[maybe_unused]] static Ignore _ = []() {
 		WM_MAGPIE_SCALINGCHANGED =
 			RegisterWindowMessage(CommonSharedConstants::WM_MAGPIE_SCALINGCHANGED);
 
@@ -53,15 +53,9 @@ static void LogRects(const RECT& srcRect, const RECT& rendererRect, const RECT& 
 		windowRect.right - windowRect.left, windowRect.bottom - windowRect.top));
 }
 
-ScalingError ScalingWindow::Create(HWND hwndSrc, ScalingOptions options) noexcept {
-	if (Handle()) {
-		return ScalingError::ScalingFailedGeneral;
-	}
-
+ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 	InitMessage();
 
-	// 缩放结束后失效
-	_options = std::move(options);
 	_runtimeError = ScalingError::NoError;
 	_isFirstFrame = true;
 	_isResizingOrMoving = false;
@@ -106,7 +100,7 @@ ScalingError ScalingWindow::Create(HWND hwndSrc, ScalingOptions options) noexcep
 		Win32Helper::GetWindowPath(hwndSrc), Win32Helper::GetWindowClassName(hwndSrc)).c_str());
 #endif
 
-	static Ignore _ = []() {
+	[[maybe_unused]] static Ignore _ = []() {
 		WNDCLASSEXW wcex{
 			.cbSize = sizeof(wcex),
 			.lpfnWndProc = _WndProc,
@@ -291,7 +285,6 @@ ScalingError ScalingWindow::Create(HWND hwndSrc, ScalingOptions options) noexcep
 		// 检查源窗口是否是无边框全屏窗口
 		if (srcWindowKind == SrcWindowKind::NoDecoration && _srcTracker.WindowRect() == _rendererRect) {
 			Logger::Get().Info("源窗口已全屏");
-			Destroy();
 			return ScalingError::Maximized;
 		}
 	}
@@ -300,7 +293,6 @@ ScalingError ScalingWindow::Create(HWND hwndSrc, ScalingOptions options) noexcep
 	ScalingError error = _renderer->Initialize(_hwndRenderer, _options.overlayOptions);
 	if (error != ScalingError::NoError) {
 		Logger::Get().Error("初始化 Renderer 失败");
-		Destroy();
 		return error;
 	}
 
@@ -314,12 +306,59 @@ ScalingError ScalingWindow::Create(HWND hwndSrc, ScalingOptions options) noexcep
 	return ScalingError::NoError;
 }
 
+void ScalingWindow::Start(HWND hwndSrc, ScalingOptions&& options) noexcept {
+	if (Handle()) {
+		options.showError(hwndSrc, ScalingError::ScalingFailedGeneral);
+		return;
+	}
+
+	options.Log();
+	// 缩放结束后失效
+	_options = std::move(options);
+
+	ScalingError error = _StartImpl(hwndSrc);
+	if (error != ScalingError::NoError) {
+		_options.showError(hwndSrc, error);
+		// 清理
+		Stop();
+	}
+}
+
+void ScalingWindow::Stop() noexcept {
+	if (_isSrcRepositioning) {
+		CleanAfterSrcRepositioned();
+	} else {
+		Destroy();
+	}
+}
+
+void ScalingWindow::SwitchScalingState(bool isWindowedMode) noexcept {
+	assert(Handle());
+
+	if (_options.IsWindowedMode() == isWindowedMode || !_srcTracker.IsFocused()) {
+		Stop();
+		return;
+	}
+
+	// 源窗口在前台时按快捷键可以切换全屏/窗口模式缩放
+	_isSrcRepositioning = true;
+	Destroy();
+	_options.IsWindowedMode(isWindowedMode);
+	RestartAfterSrcRepositioned();
+}
+
+void ScalingWindow::SwitchToolbarState() noexcept {
+	if (_renderer) {
+		_renderer->SwitchToolbarState();
+	}
+}
+
 void ScalingWindow::Render() noexcept {
 	const bool originIsSrcFocused = _srcTracker.IsFocused();
 
 	if (!_UpdateSrcState()) {
 		Logger::Get().Info("源窗口状态改变");
-		_DelayedDestroy();
+		_DelayedStop(false, _isSrcRepositioning);
 		return;
 	}
 
@@ -339,14 +378,8 @@ void ScalingWindow::Render() noexcept {
 	}
 }
 
-void ScalingWindow::ToggleToolbarState() noexcept {
-	if (_renderer) {
-		_renderer->ToggleToolbarState();
-	}
-}
-
-void ScalingWindow::RecreateAfterSrcRepositioned() noexcept {
-	Create(_srcTracker.Handle(), std::move(_options));
+void ScalingWindow::RestartAfterSrcRepositioned() noexcept {
+	Start(_srcTracker.Handle(), std::move(_options));
 }
 
 void ScalingWindow::CleanAfterSrcRepositioned() noexcept {
@@ -447,7 +480,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 
 		if (!_srcTracker.MoveOnEndResizeMove()) {
 			Logger::Get().Error("SrcTracker::MoveOnEndResizeMove 失败");
-			_DelayedDestroy();
+			_DelayedStop();
 			return 0;
 		}
 
@@ -475,7 +508,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 				newSize = SIZE{ width, height };
 			} else {
 				Logger::Get().Error("_CalcWindowedScalingWindowSize 失败");
-				_DelayedDestroy();
+				_DelayedStop();
 			}
 		} else {
 			newSize = _AdjustFullscreenWindowSize(
@@ -572,7 +605,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 			(wParam == HTCAPTION || (wParam >= HTSIZEFIRST && wParam <= HTSIZELAST))) {
 			if (Win32Helper::IsWindowHung(_srcTracker.Handle())) {
 				Logger::Get().Error("源窗口已挂起");
-				_DelayedDestroy(true);
+				_DelayedStop(true);
 				// 阻止拖拽和调整大小
 				return 0;
 			}
@@ -625,7 +658,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 
 		if (!_CalcWindowedScalingWindowSize(windowWidth, windowHeight, false)) {
 			Logger::Get().Error("_CalcWindowedScalingWindowSize 失败");
-			_DelayedDestroy();
+			_DelayedStop();
 			return TRUE;
 		}
 
@@ -669,7 +702,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 
 					if (!_CalcWindowedScalingWindowSize(windowPos.cx, windowPos.cy, false)) {
 						Logger::Get().Error("_CalcWindowedScalingWindowSize 失败");
-						_DelayedDestroy();
+						_DelayedStop();
 						return 0;
 					}
 				}
@@ -742,7 +775,7 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 		// 中不会捕获光标，因此即使触发了也不会造成严重后果。
 		// if (_isResizingOrMoving && Win32Helper::IsWindowHung(_srcTracker.Handle())) {
 		//     Logger::Get().Error("源窗口已挂起");
-		//     _DelayedDestroy(true);
+		//     _DelayedStop(true);
 		// }
 
 		// 更新窗口矩形和渲染器矩形，因为 WM_NCCALCSIZE 和 WM_WINDOWPOSCHANGING 都是可选的
@@ -1122,7 +1155,7 @@ void ScalingWindow::_Show() noexcept {
 
 	if (Win32Helper::IsWindowHung(_srcTracker.Handle())) {
 		Logger::Get().Error("源窗口已挂起");
-		_DelayedDestroy(true);
+		_DelayedStop(true);
 		return;
 	}
 
@@ -1501,7 +1534,7 @@ LRESULT ScalingWindow::_BorderHelperWndProc(HWND hWnd, UINT msg, WPARAM wParam, 
 }
 
 void ScalingWindow::_CreateBorderHelperWindows() noexcept {
-	static Ignore _ = [] {
+	[[maybe_unused]] static Ignore _ = [] {
 		WNDCLASSEXW wcex{
 			.cbSize = sizeof(wcex),
 			.lpfnWndProc = _BorderHelperWndProc,
@@ -1515,7 +1548,7 @@ void ScalingWindow::_CreateBorderHelperWindows() noexcept {
 
 	if (Win32Helper::IsWindowHung(_srcTracker.Handle())) {
 		Logger::Get().Error("源窗口已挂起");
-		_DelayedDestroy(true);
+		_DelayedStop(true);
 		return;
 	}
 
@@ -1565,7 +1598,7 @@ void ScalingWindow::_RepostionBorderHelperWindows() noexcept {
 		// 可能卡死。
 		if (Win32Helper::IsWindowHung(_srcTracker.Handle())) {
 			Logger::Get().Error("源窗口已挂起");
-			_DelayedDestroy(true);
+			_DelayedStop(true);
 			return;
 		}
 	}
@@ -1684,7 +1717,7 @@ void ScalingWindow::_UpdateTouchHoleWindows(bool onInit) noexcept {
 	const RECT srcTouchRect = _CalcSrcTouchRect();
 	_UpdateTouchProps(srcTouchRect);
 
-	static Ignore _ = [] {
+	[[maybe_unused]] static Ignore _ = [] {
 		WNDCLASSEXW wcex{
 			.cbSize = sizeof(wcex),
 			.lpfnWndProc = BkgWndProc,
@@ -1855,7 +1888,7 @@ void ScalingWindow::_UpdateRendererRect() noexcept {
 		const int offsetY = (_windowRect.top + _windowRect.bottom - srcRect.top - srcRect.bottom) / 2;
 		if (!_srcTracker.Move(offsetX, offsetY, _isResizingOrMoving)) {
 			Logger::Get().Error("SrcTracker::Move 失败");
-			_DelayedDestroy();
+			_DelayedStop();
 			return;
 		}
 
@@ -1956,7 +1989,7 @@ void ScalingWindow::_UpdateWindowRectFromWindowPos(const WINDOWPOS& windowPos) n
 	}
 }
 
-void ScalingWindow::_DelayedDestroy(bool onSrcHung) const noexcept {
+void ScalingWindow::_DelayedStop(bool onSrcHung, bool onSrcRepositioning) const noexcept {
 	if (!onSrcHung) {
 		const HWND hwndSrc = _srcTracker.Handle();
 		if (!(IsWindow(hwndSrc) && Win32Helper::IsWindowHung(hwndSrc))) {
@@ -1967,9 +2000,13 @@ void ScalingWindow::_DelayedDestroy(bool onSrcHung) const noexcept {
 	}
 
 	// 延迟销毁可以避免中间状态
-	_dispatcher.TryEnqueue([runId(RunId())]() {
+	_dispatcher.TryEnqueue([runId(RunId()), onSrcRepositioning]() {
 		if (runId == RunId()) {
-			ScalingWindow::Get().Destroy();
+			if (onSrcRepositioning) {
+				ScalingWindow::Get().Destroy();
+			} else {
+				ScalingWindow::Get().Stop();
+			}
 		}
 	});
 }

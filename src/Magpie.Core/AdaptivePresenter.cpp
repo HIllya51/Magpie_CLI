@@ -15,6 +15,7 @@ bool AdaptivePresenter::_Initialize(HWND hwndAttach) noexcept {
 			return false;
 		}
 
+		_isDCompPresenting = true;
 		return true;
 	}
 
@@ -101,7 +102,7 @@ bool AdaptivePresenter::BeginFrame(
 	winrt::com_ptr<ID3D11RenderTargetView>& frameRtv,
 	POINT& drawOffset
 ) noexcept {
-	if (_dcompSurface) {
+	if (_isDCompPresenting) {
 		HRESULT hr = _dcompSurface->BeginDraw(nullptr, IID_PPV_ARGS(&frameTex), &drawOffset);
 		if (FAILED(hr)) {
 			Logger::Get().ComError("BeginDraw 失败", hr);
@@ -130,7 +131,7 @@ bool AdaptivePresenter::BeginFrame(
 }
 
 void AdaptivePresenter::EndFrame(bool waitForRenderComplete) noexcept {
-	if (_dcompSurface) {
+	if (_isDCompPresenting) {
 		_dcompSurface->EndDraw();
 	}
 
@@ -157,7 +158,7 @@ void AdaptivePresenter::EndFrame(bool waitForRenderComplete) noexcept {
 		_WaitForDwmComposition();
 	}
 
-	if (_dcompSurface) {
+	if (_isDCompPresenting) {
 		_dcompDevice->Commit();
 	} else {
 		// 两个垂直同步之间允许渲染数帧，SyncInterval = 0 只呈现最新的一帧，旧帧被丢弃
@@ -176,7 +177,6 @@ void AdaptivePresenter::EndFrame(bool waitForRenderComplete) noexcept {
 
 			// 清除 DirectCompostion 内容
 			_dcompVisual->SetContent(nullptr);
-			_dcompSurface = nullptr;
 			_dcompDevice->Commit();
 		}
 	}
@@ -194,7 +194,8 @@ bool AdaptivePresenter::OnResize() noexcept {
 
 	if (ScalingWindow::Get().IsResizingOrMoving() || !_dxgiSwapChain) {
 		// 切换到 DirectComposition 呈现，失败则回落到交换链
-		if (_ResizeDCompVisual()) {
+		_isDCompPresenting = _ResizeDCompVisual();
+		if (_isDCompPresenting) {
 			return true;
 		}
 
@@ -215,7 +216,7 @@ bool AdaptivePresenter::OnResize() noexcept {
 }
 
 void AdaptivePresenter::OnEndResize(bool& shouldRedraw) noexcept {
-	if (!_dcompSurface || !_dxgiSwapChain) {
+	if (!_isDCompPresenting || !_dxgiSwapChain) {
 		shouldRedraw = false;
 		return;
 	}
@@ -223,7 +224,7 @@ void AdaptivePresenter::OnEndResize(bool& shouldRedraw) noexcept {
 	shouldRedraw = true;
 
 	_ResizeSwapChain();
-	_dcompSurface = nullptr;
+	_isDCompPresenting = false;
 	// 交换链呈现新帧后再清除 DirectCompostion 内容，确保无缝切换
 	_isSwitchingToSwapChain = true;
 }
@@ -271,10 +272,16 @@ bool AdaptivePresenter::_ResizeSwapChain() noexcept {
 }
 
 bool AdaptivePresenter::_ResizeDCompVisual(HWND hwndAttach) noexcept {
-	if (_dcompVisual) {
-		// 先释放旧表面
-		_dcompVisual->SetContent(nullptr);
-		_dcompSurface = nullptr;
+	const SIZE rendererSize = Win32Helper::GetSizeOfRect(ScalingWindow::Get().RendererRect());
+
+	if (_dcompSurface) {
+		// 使用 IDCompositionVirtualSurface 而不是 IDCompositionSurface 的原因是
+		// IDCompositionDevice2::CreateSurface 有时相当慢，最坏情况下要几十毫秒。
+		HRESULT hr = _dcompSurface->Resize((UINT)rendererSize.cx, (UINT)rendererSize.cy);
+		if (FAILED(hr)) {
+			Logger::Get().ComError("Resize 失败", hr);
+			return false;
+		}
 	} else {
 		// 初始化 DirectComposition
 		HRESULT hr = DCompositionCreateDevice3(
@@ -310,26 +317,23 @@ bool AdaptivePresenter::_ResizeDCompVisual(HWND hwndAttach) noexcept {
 			Logger::Get().ComError("SetRoot 失败", hr);
 			return false;
 		}
+
+		hr = _dcompDevice->CreateVirtualSurface(
+			(UINT)rendererSize.cx,
+			(UINT)rendererSize.cy,
+			DXGI_FORMAT_R8G8B8A8_UNORM,
+			DXGI_ALPHA_MODE_IGNORE,
+			_dcompSurface.put()
+		);
+		if (FAILED(hr)) {
+			Logger::Get().ComError("CreateVirtualSurface 失败", hr);
+			return false;
+		}
 	}
 
-	const SIZE rendererSize = Win32Helper::GetSizeOfRect(ScalingWindow::Get().RendererRect());
-	HRESULT hr = _dcompDevice->CreateSurface(
-		(UINT)rendererSize.cx,
-		(UINT)rendererSize.cy,
-		DXGI_FORMAT_R8G8B8A8_UNORM,
-		DXGI_ALPHA_MODE_IGNORE,
-		_dcompSurface.put()
-	);
-	if (FAILED(hr)) {
-		Logger::Get().ComError("CreateSurface 失败", hr);
-		return false;
-	}
-
-	hr = _dcompVisual->SetContent(_dcompSurface.get());
+	HRESULT hr = _dcompVisual->SetContent(_dcompSurface.get());
 	if (FAILED(hr)) {
 		Logger::Get().ComError("SetContent 失败", hr);
-		// 失败时确保 _dcompSurface 为空
-		_dcompSurface = nullptr;
 		return false;
 	}
 
