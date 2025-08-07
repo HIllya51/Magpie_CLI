@@ -3,7 +3,6 @@
 #include "Event.h"
 #include "Shortcut.h"
 #include "Profile.h"
-#include <parallel_hashmap/phmap.h>
 #include <rapidjson/document.h>
 
 namespace Magpie {
@@ -51,7 +50,8 @@ struct _AppSettingsData {
 
 	float _minFrameRate = 10.0f;
 
-	ToolbarState _initialToolbarState = ToolbarState::AutoHide;
+	ToolbarState _fullscreenInitialToolbarState = ToolbarState::AutoHide;
+	ToolbarState _windowedInitialToolbarState = ToolbarState::AutoHide;
 	// 为空表示 FOLDERID_Screenshots，支持绝对路径和相对路径
 	std::filesystem::path _screenshotsDir;
 
@@ -75,6 +75,7 @@ struct _AppSettingsData {
 	bool _isCheckForPreviewUpdates = false;
 	bool _isStatisticsForDynamicDetectionEnabled = false;
 	bool _isFP16Disabled = false;
+	bool _isKeepOnTop = false;
 };
 
 class AppSettings : private _AppSettingsData {
@@ -206,6 +207,15 @@ public:
 		SaveAsync();
 	}
 
+	bool IsKeepOnTop() const noexcept {
+		return _isKeepOnTop;
+	}
+
+	void IsKeepOnTop(bool value) noexcept {
+		_isKeepOnTop = value;
+		SaveAsync();
+	}
+
 	bool IsAllowScalingMaximized() const noexcept {
 		return _isAllowScalingMaximized;
 	}
@@ -311,12 +321,21 @@ public:
 		SaveAsync();
 	}
 
-	ToolbarState InitialToolbarState() const noexcept {
-		return _initialToolbarState;
+	ToolbarState FullscreenInitialToolbarState() const noexcept {
+		return _fullscreenInitialToolbarState;
 	}
 
-	void InitialToolbarState(ToolbarState value) noexcept {
-		_initialToolbarState = value;
+	void FullscreenInitialToolbarState(ToolbarState value) noexcept {
+		_fullscreenInitialToolbarState = value;
+		SaveAsync();
+	}
+
+	ToolbarState WindowedInitialToolbarState() const noexcept {
+		return _windowedInitialToolbarState;
+	}
+
+	void WindowedInitialToolbarState(ToolbarState value) noexcept {
+		_windowedInitialToolbarState = value;
 		SaveAsync();
 	}
 

@@ -42,6 +42,16 @@ HomeViewModel::HomeViewModel() {
 	);
 }
 
+hstring HomeViewModel::TimerDescription() const noexcept {
+	ResourceLoader resourceLoader =
+		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
+	hstring fmtStr = resourceLoader.GetString(L"Home_Activation_Timer_Description");
+	return hstring(fmt::format(
+		fmt::runtime(std::wstring_view(fmtStr)),
+		AppSettings::Get().CountdownSeconds()
+	));
+}
+
 bool HomeViewModel::IsTimerOn() const noexcept {
 	return ScalingService::Get().IsTimerOn();
 }
@@ -56,32 +66,26 @@ hstring HomeViewModel::TimerLabelText() const noexcept {
 	return to_hstring((int)std::ceil(ScalingService.SecondsLeft()));
 }
 
-hstring HomeViewModel::TimerButtonText() const noexcept {
-	ScalingService& ScalingService = ScalingService::Get();
-	ResourceLoader resourceLoader =
-		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
-	if (ScalingService.IsTimerOn()) {
-		return resourceLoader.GetString(L"Home_Activation_Timer_Cancel");
-	} else {
-		hstring fmtStr = resourceLoader.GetString(L"Home_Activation_Timer_ButtonText");
-		return hstring(fmt::format(
-			fmt::runtime(std::wstring_view(fmtStr)),
-			AppSettings::Get().CountdownSeconds()
-		));
-	}
-}
-
 bool HomeViewModel::IsNotRunning() const noexcept {
 	return !ScalingService::Get().IsScaling();
 }
 
-void HomeViewModel::ToggleTimer() const noexcept {
-	ScalingService& scalingService = ScalingService::Get();
-	if (scalingService.IsTimerOn()) {
-		scalingService.StopTimer();
+hstring HomeViewModel::TimerButtonText(bool windowedMode) const noexcept {
+	ResourceLoader resourceLoader =
+		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
+	if (ScalingService::Get().IsTimerOn(windowedMode)) {
+		return resourceLoader.GetString(L"Home_Activation_Timer_Cancel");
 	} else {
-		scalingService.StartTimer();
+		return resourceLoader.GetString(L"Home_Activation_Timer_Start");
 	}
+}
+
+void HomeViewModel::ToggleTimerFullscreen() const noexcept {
+	_ToggleTimer(false);
+}
+
+void HomeViewModel::ToggleTimerWindowed() const noexcept {
+	_ToggleTimer(true);
 }
 
 uint32_t HomeViewModel::Delay() const noexcept {
@@ -91,7 +95,7 @@ uint32_t HomeViewModel::Delay() const noexcept {
 void HomeViewModel::Delay(uint32_t value) {
 	AppSettings::Get().CountdownSeconds(value);
 	RaisePropertyChanged(L"Delay");
-	RaisePropertyChanged(L"TimerButtonText");
+	RaisePropertyChanged(L"TimerDescription");
 }
 
 inline void HomeViewModel::ShowUpdateCard(bool value) noexcept {
@@ -141,11 +145,36 @@ void HomeViewModel::RemindMeLater() {
 	ShowUpdateCard(false);
 }
 
-int HomeViewModel::InitialToolbarState() const noexcept {
-	return (int)AppSettings::Get().InitialToolbarState();
+hstring HomeViewModel::InitialToolbarStateDescription() const noexcept {
+	static constexpr std::array STATE_STRING_IDS = {
+		L"Home_Toolbar_InitialState_Off/Content",
+		L"Home_Toolbar_InitialState_AlwaysShow/Content",
+		L"Home_Toolbar_InitialState_AutoHide/Content"
+	};
+
+	const ToolbarState fullscreenInitialState =
+		AppSettings::Get().FullscreenInitialToolbarState();
+	const ToolbarState windowedInitialState =
+		AppSettings::Get().WindowedInitialToolbarState();
+
+	const ResourceLoader resourceLoader =
+		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
+	if (fullscreenInitialState == windowedInitialState) {
+		return resourceLoader.GetString(STATE_STRING_IDS[(uint32_t)fullscreenInitialState]);
+	} else {
+		return hstring(StrHelper::Concat(
+			resourceLoader.GetString(STATE_STRING_IDS[(uint32_t)fullscreenInitialState]),
+			L" | ",
+			resourceLoader.GetString(STATE_STRING_IDS[(uint32_t)windowedInitialState]))
+		);
+	}
 }
 
-void HomeViewModel::InitialToolbarState(int value) {
+int HomeViewModel::FullscreenInitialToolbarState() const noexcept {
+	return (int)AppSettings::Get().FullscreenInitialToolbarState();
+}
+
+void HomeViewModel::FullscreenInitialToolbarState(int value) {
 	if (value < 0) {
 		return;
 	}
@@ -153,12 +182,34 @@ void HomeViewModel::InitialToolbarState(int value) {
 	const ToolbarState state = (ToolbarState)value;
 
 	AppSettings& settings = AppSettings::Get();
-	if (settings.InitialToolbarState() == state) {
+	if (settings.FullscreenInitialToolbarState() == state) {
 		return;
 	}
 
-	settings.InitialToolbarState(state);
-	RaisePropertyChanged(L"InitialToolbarState");
+	settings.FullscreenInitialToolbarState(state);
+	RaisePropertyChanged(L"FullscreenInitialToolbarState");
+	RaisePropertyChanged(L"InitialToolbarStateDescription");
+}
+
+int HomeViewModel::WindowedInitialToolbarState() const noexcept {
+	return (int)AppSettings::Get().WindowedInitialToolbarState();
+}
+
+void HomeViewModel::WindowedInitialToolbarState(int value) {
+	if (value < 0) {
+		return;
+	}
+
+	const ToolbarState state = (ToolbarState)value;
+
+	AppSettings& settings = AppSettings::Get();
+	if (settings.WindowedInitialToolbarState() == state) {
+		return;
+	}
+
+	settings.WindowedInitialToolbarState(state);
+	RaisePropertyChanged(L"WindowedInitialToolbarState");
+	RaisePropertyChanged(L"InitialToolbarStateDescription");
 }
 
 hstring HomeViewModel::ScreenshotSaveDirectory() const noexcept {
@@ -172,22 +223,26 @@ void HomeViewModel::OpenScreenshotSaveDirectory() const noexcept {
 	}
 }
 
-void HomeViewModel::ChangeScreenshotSaveDirectory() noexcept {
+fire_and_forget HomeViewModel::ChangeScreenshotSaveDirectory() noexcept {
+	const ResourceLoader resourceLoader =
+		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
+	const hstring titleStr = resourceLoader.GetString(L"Dialog_SetlectScreenshotSaveDirectory_Title");
+
+	const std::filesystem::path oldValue = AppSettings::Get().ScreenshotsDir();
+
+	auto weakThis = get_weak();
+
+	// 在主线程使用 IFileOpenDialog 有些问题，尤其在 Win10 中
+	co_await resume_background();
+
 	com_ptr<IFileOpenDialog> pickFolderDialog =
 		try_create_instance<IFileOpenDialog>(CLSID_FileOpenDialog);
 	if (!pickFolderDialog) {
 		Logger::Get().Error("创建 FileSaveDialog 失败");
-		return;
+		co_return;
 	}
-
-	static std::wstring titleStr = [] {
-		ResourceLoader resourceLoader =
-			ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
-		return std::wstring(resourceLoader.GetString(L"Dialog_SetlectScreenshotSaveDirectory_Title"));
-	}();
+	
 	pickFolderDialog->SetTitle(titleStr.c_str());
-
-	const std::filesystem::path oldValue = AppSettings::Get().ScreenshotsDir();
 
 	if (!oldValue.empty()) {
 		// 选择父目录作为初始目录
@@ -209,11 +264,15 @@ void HomeViewModel::ChangeScreenshotSaveDirectory() noexcept {
 	std::optional<std::filesystem::path> screenshotDir =
 		FileDialogHelper::OpenFileDialog(pickFolderDialog.get(), FOS_PICKFOLDERS);
 	if (!screenshotDir || screenshotDir->empty() || *screenshotDir == oldValue) {
-		return;
+		co_return;
 	}
 
-	AppSettings::Get().ScreenshotsDir(*screenshotDir);
-	RaisePropertyChanged(L"ScreenshotSaveDirectory");
+	co_await App::Get().Dispatcher();
+
+	if (weakThis.get()) {
+		AppSettings::Get().ScreenshotsDir(*screenshotDir);
+		RaisePropertyChanged(L"ScreenshotSaveDirectory");
+	}
 }
 
 bool HomeViewModel::IsTouchSupportEnabled() const noexcept {
@@ -259,26 +318,33 @@ bool HomeViewModel::IsAllowScalingMaximized() const noexcept {
 }
 
 void HomeViewModel::IsAllowScalingMaximized(bool value) {
-	AppSettings::Get().IsAllowScalingMaximized(value);
+	AppSettings& settings = AppSettings::Get();
+
+	if (settings.IsAllowScalingMaximized() == value) {
+		return;
+	}
+
+	settings.IsAllowScalingMaximized(value);
+	RaisePropertyChanged(L"IsAllowScalingMaximized");
 
 	if (value) {
 		ScalingService::Get().CheckForeground();
 	}
 }
 
-bool HomeViewModel::IsInlineParams() const noexcept {
-	return AppSettings::Get().IsInlineParams();
+bool HomeViewModel::IsKeepOnTop() const noexcept {
+	return AppSettings::Get().IsKeepOnTop();
 }
 
-void HomeViewModel::IsInlineParams(bool value) {
+void HomeViewModel::IsKeepOnTop(bool value) {
 	AppSettings& settings = AppSettings::Get();
 
-	if (settings.IsInlineParams() == value) {
+	if (settings.IsKeepOnTop() == value) {
 		return;
 	}
 
-	settings.IsInlineParams(value);
-	RaisePropertyChanged(L"IsInlineParams");
+	settings.IsKeepOnTop(value);
+	RaisePropertyChanged(L"IsKeepOnTop");
 }
 
 bool HomeViewModel::IsSimulateExclusiveFullscreen() const noexcept {
@@ -294,6 +360,21 @@ void HomeViewModel::IsSimulateExclusiveFullscreen(bool value) {
 
 	settings.IsSimulateExclusiveFullscreen(value);
 	RaisePropertyChanged(L"IsSimulateExclusiveFullscreen");
+}
+
+bool HomeViewModel::IsInlineParams() const noexcept {
+	return AppSettings::Get().IsInlineParams();
+}
+
+void HomeViewModel::IsInlineParams(bool value) {
+	AppSettings& settings = AppSettings::Get();
+
+	if (settings.IsInlineParams() == value) {
+		return;
+	}
+
+	settings.IsInlineParams(value);
+	RaisePropertyChanged(L"IsInlineParams");
 }
 
 static constexpr std::array MIN_FRAME_RATE_OPTIONS{ 0,5,10,15,20,30,60 };
@@ -347,6 +428,40 @@ void HomeViewModel::IsDeveloperMode(bool value) {
 
 	settings.IsDeveloperMode(value);
 	RaisePropertyChanged(L"IsDeveloperMode");
+}
+
+void HomeViewModel::LocateMagpieLogs() noexcept {
+	Win32Helper::ShellOpen(StrHelper::Concat(L".\\", CommonSharedConstants::LOGS_DIR).c_str());
+}
+
+static fire_and_forget LocateTempLogs(const wchar_t* logName) noexcept {
+	std::wstring path(MAX_PATH + 1, L'\0');
+
+	const DWORD len = GetTempPath(MAX_PATH + 2, path.data());
+	if (len <= 0) {
+		co_return;
+	}
+
+	path.resize(len);
+	if (!path.ends_with(L'\\')) {
+		path.push_back(L'\\');
+	}
+
+	path.append(logName);
+	if (!Win32Helper::FileExists(path.c_str())) {
+		co_return;
+	}
+
+	co_await resume_background();
+	Win32Helper::OpenFolderAndSelectFile(path.c_str());
+}
+
+void HomeViewModel::LocateTouchHelperLogs() noexcept {
+	LocateTempLogs(CommonSharedConstants::TOUCH_HELPER_LOG_NAME);
+}
+
+void HomeViewModel::LocateUpdaterLogs() noexcept {
+	LocateTempLogs(CommonSharedConstants::UPDATER_LOG_NAME);
 }
 
 bool HomeViewModel::IsBenchmarkMode() const noexcept {
@@ -500,7 +615,7 @@ void HomeViewModel::IsStatisticsForDynamicDetectionEnabled(bool value) {
 	RaisePropertyChanged(L"IsStatisticsForDynamicDetectionEnabled");
 }
 
-void HomeViewModel::_ScalingService_IsTimerOnChanged(bool value) {
+void HomeViewModel::_ScalingService_IsTimerOnChanged(bool value, bool) {
 	if (!value) {
 		RaisePropertyChanged(L"TimerProgressRingValue");
 	}
@@ -518,6 +633,15 @@ void HomeViewModel::_ScalingService_TimerTick(double) {
 
 void HomeViewModel::_ScalingService_IsScalingChanged(bool) {
 	RaisePropertyChanged(L"IsNotRunning");
+}
+
+void HomeViewModel::_ToggleTimer(bool windowedMode) const noexcept {
+	ScalingService& scalingService = ScalingService::Get();
+	if (scalingService.IsTimerOn(windowedMode)) {
+		scalingService.StopTimer();
+	} else {
+		scalingService.StartTimer(windowedMode);
+	}
 }
 
 }

@@ -306,9 +306,6 @@
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>Reorganizar</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>A análise falhou</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>Nenhum</value>
   </data>
@@ -378,12 +375,6 @@
   <data name="Home_Activation_Timer_Cancel" xml:space="preserve">
     <value>Cancelar</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Redimensionar a janela em primeiro plano quando o temporizador terminar</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>Redimensionar após {}s</value>
-  </data>
   <data name="ShortcutDialog_Save" xml:space="preserve">
     <value>Salvar</value>
   </data>
@@ -416,9 +407,6 @@
   </data>
   <data name="Settings_Launch.Header" xml:space="preserve">
     <value>Inicialização</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>Importar ScaleModels.json</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Mais opções</value>
@@ -549,14 +537,8 @@
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Description" xml:space="preserve">
     <value>Notificações e pop-ups de determinados aplicativos serão bloqueados</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Minimizar para a área de notificação na inicialização</value>
-  </data>
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Header" xml:space="preserve">
     <value>Simular tela cheia exclusiva durante o redimensionamento</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>Você precisa ativar a opção "Exibir o aplicativo na área de notificação" para usar essa configuração</value>
   </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>Erro</value>
@@ -641,9 +623,6 @@
   </data>
   <data name="NotifyIcon_MainWindow" xml:space="preserve">
     <value>Janela principal</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>Importar ScaleModels.json</value>
   </data>
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>Home</value>

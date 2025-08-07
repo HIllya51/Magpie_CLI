@@ -126,14 +126,8 @@
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>主页</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>计时结束后缩放前台窗口</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>定时器</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>{} 秒后缩放</value>
   </data>
   <data name="Home_Activation_Timer_Cancel" xml:space="preserve">
     <value>取消</value>
@@ -251,9 +245,6 @@
   </data>
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>导入</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>导入旧版程序的 ScaleModels.json</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>更多选项</value>
@@ -471,9 +462,6 @@
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>重新排序</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>解析失败</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>无</value>
   </data>
@@ -607,16 +595,10 @@
     <value>内联效果参数</value>
   </data>
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Description" xml:space="preserve">
-    <value>可以阻止某些应用的通知和弹窗</value>
+    <value>仅适用于全屏模式缩放。启用后可以阻止某些应用的通知和弹窗</value>
   </data>
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Header" xml:space="preserve">
     <value>缩放时模拟独占全屏</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>启用了“在系统托盘上显示应用程序”时才能使用此选项</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>启动时最小化到系统托盘</value>
   </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>错误</value>
@@ -678,9 +660,6 @@
   </data>
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>导入缩放模式</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>导入旧版程序的 ScaleModels.json</value>
   </data>
   <data name="About_Version_UpdateSettings.Header" xml:space="preserve">
     <value>更新设置</value>
@@ -993,5 +972,50 @@
   </data>
   <data name="Overlay_Toolbar_SwitchToWindowed" xml:space="preserve">
     <value>切换到窗口模式缩放</value>
+  </data>
+  <data name="Home_Toolbar_InitialState_Fullscreen.Header" xml:space="preserve">
+    <value>全屏模式缩放</value>
+  </data>
+  <data name="Home_Toolbar_InitialState_Windowed.Header" xml:space="preserve">
+    <value>窗口模式缩放</value>
+  </data>
+  <data name="Message_ExportScalingModesFailed" xml:space="preserve">
+    <value>导出缩放模式失败。</value>
+  </data>
+  <data name="Message_ImportScalingModesFailed" xml:space="preserve">
+    <value>导入缩放模式失败。</value>
+  </data>
+  <data name="Home_Advanced_DeveloperOptions_LocateLogs.Header" xml:space="preserve">
+    <value>打开日志位置</value>
+  </data>
+  <data name="Home_Advanced_KeepOnTop.Description" xml:space="preserve">
+    <value>仅适用于全屏模式缩放。启用后当缩放窗口位于前台时将置顶以减少干扰，但可能会遮挡菜单和弹窗。如果显卡不支持多平面叠加（MPO），此选项也有助于降低延迟</value>
+  </data>
+  <data name="Home_Advanced_KeepOnTop.Header" xml:space="preserve">
+    <value>置顶缩放窗口</value>
+  </data>
+  <data name="Message_WindowedDesktopDuplication" xml:space="preserve">
+    <value>Desktop Duplication 捕获不支持窗口模式缩放。</value>
+  </data>
+  <data name="Profile_General_DesktopDuplicationWarning.Title" xml:space="preserve">
+    <value>此捕获方式和窗口模式缩放不兼容。</value>
+  </data>
+  <data name="Settings_Launch_RunAtStartup.Description" xml:space="preserve">
+    <value>启用了“在系统托盘上显示应用程序”时将不会显示主窗口</value>
+  </data>
+  <data name="Home_Activation_Timer_Description" xml:space="preserve">
+    <value>{} 秒后缩放前台窗口</value>
+  </data>
+  <data name="Home_Activation_Timer_Start" xml:space="preserve">
+    <value>开始</value>
+  </data>
+  <data name="NotifyIcon_Timer_Fullscreen" xml:space="preserve">
+    <value>{} 秒后缩放 (全屏模式)</value>
+  </data>
+  <data name="NotifyIcon_Timer_Windowed" xml:space="preserve">
+    <value>{} 秒后缩放 (窗口模式)</value>
+  </data>
+  <data name="Overlay_Toolbar_Minimize" xml:space="preserve">
+    <value>最小化</value>
   </data>
 </root>

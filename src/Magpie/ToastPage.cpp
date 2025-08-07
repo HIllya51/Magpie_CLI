@@ -3,11 +3,11 @@
 #if __has_include("ToastPage.g.cpp")
 #include "ToastPage.g.cpp"
 #endif
+#include "App.h"
 #include "Win32Helper.h"
 #include "IconHelper.h"
 #include "LocalizationService.h"
 #include "XamlHelper.h"
-#include "App.h"
 #include <dwmapi.h>
 
 using namespace ::Magpie;
@@ -50,8 +50,12 @@ void ToastPage::InitializeComponent() {
 
 static bool TrySetOwnder(HWND hwndToast, HWND hwndTarget) noexcept {
 	// 如果源窗口挂起，SetWindowLongPtr 会卡住
-	return !Win32Helper::IsWindowHung(hwndTarget) &&
-		(SetWindowLongPtr(hwndToast, GWLP_HWNDPARENT, (LONG_PTR)hwndTarget) || GetLastError() == 0);
+	if (!Win32Helper::IsWindowHung(hwndTarget)) {
+		return false;
+	}
+
+	SetLastError(0);
+	return SetWindowLongPtr(hwndToast, GWLP_HWNDPARENT, (LONG_PTR)hwndTarget) || GetLastError() == 0;
 }
 
 static void UpdateToastPosition(HWND hwndToast, const RECT& frameRect, bool updateZOrder) noexcept {
@@ -101,6 +105,8 @@ fire_and_forget ToastPage::ShowMessageOnWindow(std::wstring title, std::wstring 
 	MUXC::TeachingTip oldTeachingTip = MessageTeachingTip();
 	if (oldTeachingTip) {
 		UnloadObject(oldTeachingTip);
+		// 确保卸载完成，防止弹出动画 bug
+		co_await resume_foreground(dispatcher, CoreDispatcherPriority::Low);
 	} else {
 		oldTeachingTip = std::move(_oldTeachingTip);
 	}
@@ -112,9 +118,8 @@ fire_and_forget ToastPage::ShowMessageOnWindow(std::wstring title, std::wstring 
 
 	// 更改所有者关系使弹窗始终在 hwndTarget 上方。如果失败，改为定期将弹窗置顶，如果 hwndTarget
 	// 的 IL 更高或是 UWP 窗口就会发生这种情况。
-	SetLastError(0);
 	const bool isOwned = TrySetOwnder(_hwndToast, hwndTarget);
-	bool isTargetTopMost = GetWindowExStyle(_hwndToast) & WS_EX_TOPMOST;
+	bool isTargetTopMost = GetWindowExStyle(hwndTarget) & WS_EX_TOPMOST;
 	if (isOwned) {
 		// _hwndToast 的输入已被附加到了 hWnd 上，这是所有者窗口的默认行为，但我们不需要。
 		// 见 https://devblogs.microsoft.com/oldnewthing/20130412-00/?p=4683
@@ -138,7 +143,7 @@ fire_and_forget ToastPage::ShowMessageOnWindow(std::wstring title, std::wstring 
 	UpdateToastPosition(_hwndToast, frameRect, true);
 
 	// 创建新的 TeachingTip
-	MUXC::TeachingTip curTeachingTip = FindName(L"MessageTeachingTip").as<MUXC::TeachingTip>();
+	MUXC::TeachingTip curTeachingTip = FindName(L"MessageTeachingTip").try_as<MUXC::TeachingTip>();
 	// 帮助 XAML 选择合适的字体，直接设置 TeachingTip 的 Language 属性无用
 	MessageTeachingTipContent().Language(LocalizationService::Get().Language());
 
@@ -158,11 +163,11 @@ fire_and_forget ToastPage::ShowMessageOnWindow(std::wstring title, std::wstring 
 			return;
 		}
 
-		IControlProtected protectedAccessor = teachingTip.as<IControlProtected>();
+		IControlProtected protectedAccessor = teachingTip.try_as<IControlProtected>();
 
 		// 隐藏关闭按钮
 		if (DependencyObject closeButton = protectedAccessor.GetTemplateChild(L"AlternateCloseButton")) {
-			closeButton.as<FrameworkElement>().Visibility(Visibility::Collapsed);
+			closeButton.try_as<FrameworkElement>().Visibility(Visibility::Collapsed);
 		}
 
 		// 检查 Tag 记录，修复弹出动画只需执行一次
@@ -242,14 +247,20 @@ fire_and_forget ToastPage::ShowMessageOnWindow(std::wstring title, std::wstring 
 			co_return;
 		}
 
-		if (!IsWindow((HWND)hwndTarget) || !IsWindow(_hwndToast) || !Win32Helper::GetWindowFrameRect((HWND)hwndTarget, frameRect)) {
-			// 附加的窗口已经关闭，toast 也应关闭，_oldTeachingTip 用于延长生命周期避免崩溃
-			UnloadObject(curTeachingTip);
-			_oldTeachingTip = std::move(curTeachingTip);
+		if (!IsWindow((HWND)hwndTarget) || !IsWindow(_hwndToast) ||
+			!Win32Helper::GetWindowFrameRect((HWND)hwndTarget, frameRect))
+		{
+			// 附加的窗口关闭后 toast 也应关闭。应检查 curTeachingTip 是否已经在新的调用中被卸载，
+			// 见函数开头的 UnloadObject。
+			if (curTeachingTip.IsLoaded()) {
+				UnloadObject(curTeachingTip);
+				// 延长生命周期避免崩溃
+				_oldTeachingTip = std::move(curTeachingTip);
+			}
 			co_return;
 		}
 
-		isTargetTopMost = GetWindowExStyle(_hwndToast) & WS_EX_TOPMOST;
+		isTargetTopMost = GetWindowExStyle(hwndTarget) & WS_EX_TOPMOST;
 		if (isTargetTopMost || (!isOwned && GetForegroundWindow() == (HWND)hwndTarget)) {
 			// 如果 hwndTarget 位于前台，定期将弹窗置顶
 			SetWindowPos(_hwndToast, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);

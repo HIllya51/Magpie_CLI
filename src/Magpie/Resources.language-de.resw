@@ -126,9 +126,6 @@
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>Startseite</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Fenster im Vordergrund skalieren, sobald der Timer endet</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>Verzögertes skalieren</value>
   </data>
@@ -188,9 +185,6 @@
   </data>
   <data name="Settings_General_Theme_Light.Content" xml:space="preserve">
     <value>Hell</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>Skaliert nach {}s</value>
   </data>
   <data name="Home_Activation_Timer_Delay.Header" xml:space="preserve">
     <value>Verzögerung in Sekunden</value>
@@ -291,12 +285,6 @@
   <data name="Profile_Performance_GraphicsCard.Header" xml:space="preserve">
     <value>Grafikkarte</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>Um diese Einstellung zu verwenden, müssen Sie die Option "Anwendung in der Taskleiste anzeigen" aktivieren</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Beim Starten in die Taskleiste minimieren</value>
-  </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>Fehler</value>
   </data>
@@ -353,9 +341,6 @@
   </data>
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>Importieren</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>Importiere ScaleModels.json</value>
   </data>
   <data name="Home_UpdateCard_ReleaseNotes.Content" xml:space="preserve">
     <value>Versionshinweise</value>
@@ -479,9 +464,6 @@
   </data>
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>Umsortieren</value>
-  </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>Parsing fehlgeschlagen</value>
   </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>Keiner</value>
@@ -693,9 +675,6 @@
   </data>
   <data name="Settings_General_RequireRestart.Title" xml:space="preserve">
     <value>Damit die Änderung wirksam wird, ist ein Neustart erforderlich</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>ScaleModels.json importieren</value>
   </data>
   <data name="About_Version_Version" xml:space="preserve">
     <value>Version</value>

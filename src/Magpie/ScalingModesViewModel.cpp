@@ -3,17 +3,15 @@
 #if __has_include("ScalingModesViewModel.g.cpp")
 #include "ScalingModesViewModel.g.cpp"
 #endif
-#include "EffectsService.h"
-#include "AppSettings.h"
-#include "EffectHelper.h"
-#include "Logger.h"
-#include "StrHelper.h"
-#include "Win32Helper.h"
-#include "ScalingMode.h"
-#include "FileDialogHelper.h"
-#include "CommonSharedConstants.h"
-#include "ScalingModeItem.h"
 #include "App.h"
+#include "AppSettings.h"
+#include "CommonSharedConstants.h"
+#include "FileDialogHelper.h"
+#include "Logger.h"
+#include "ScalingMode.h"
+#include "ScalingModeItem.h"
+#include "ToastService.h"
+#include "Win32Helper.h"
 
 using namespace Magpie;
 
@@ -30,34 +28,48 @@ ScalingModesViewModel::ScalingModesViewModel() {
 		auto_revoke, std::bind_front(&ScalingModesViewModel::_ScalingModesService_Removed, this));
 }
 
-static std::optional<std::filesystem::path> OpenFileDialogForJson(IFileDialog* fileDialog) noexcept {
-	static std::wstring jsonFileStr(
-		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID)
-		.GetString(L"Dialog_JsonFile"));
-
-	const COMDLG_FILTERSPEC fileType{ jsonFileStr.c_str(), L"*.json"};
+static std::optional<std::filesystem::path> OpenFileDialogForJson(
+	IFileDialog* fileDialog,
+	const wchar_t* title,
+	const wchar_t* jsonFileStr
+) noexcept {
+	fileDialog->SetTitle(title);
+	const COMDLG_FILTERSPEC fileType{ jsonFileStr, L"*.json" };
 	fileDialog->SetFileTypes(1, &fileType);
 	fileDialog->SetDefaultExtension(L"json");
 
 	return FileDialogHelper::OpenFileDialog(fileDialog, FOS_STRICTFILETYPES);
 }
 
-void ScalingModesViewModel::Export() const noexcept {
+fire_and_forget ScalingModesViewModel::Export() noexcept {
+	ResourceLoader resourceLoader =
+		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
+	const hstring title = resourceLoader.GetString(L"Dialog_Export_Title");
+	const hstring jsonFileStr = resourceLoader.GetString(L"Dialog_JsonFile");
+
+	auto weakThis = get_weak();
+
+	// 在主线程使用 IFileOpenDialog 有些问题，尤其在 Win10 中
+	co_await resume_background();
+
 	com_ptr<IFileSaveDialog> fileDialog = try_create_instance<IFileSaveDialog>(CLSID_FileSaveDialog);
 	if (!fileDialog) {
 		Logger::Get().Error("创建 FileSaveDialog 失败");
-		return;
+		co_return;
 	}
 
 	fileDialog->SetFileName(L"ScalingModes");
-	static std::wstring title(
-		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID)
-		.GetString(L"Dialog_Export_Title"));
-	fileDialog->SetTitle(title.c_str());
 
-	std::optional<std::filesystem::path> fileName = OpenFileDialogForJson(fileDialog.get());
+	std::optional<std::filesystem::path> fileName =
+		OpenFileDialogForJson(fileDialog.get(), title.c_str(), jsonFileStr.c_str());
 	if (!fileName.has_value() || fileName->empty()) {
-		return;
+		co_return;
+	}
+
+	co_await App::Get().Dispatcher();
+
+	if (!weakThis.get()) {
+		co_return;
 	}
 
 	rapidjson::StringBuffer json;
@@ -66,58 +78,62 @@ void ScalingModesViewModel::Export() const noexcept {
 	ScalingModesService::Get().Export(writer);
 	writer.EndObject();
 
-	Win32Helper::WriteTextFile(fileName->c_str(), {json.GetString(), json.GetLength()});
+	if (!Win32Helper::WriteTextFile(fileName->c_str(), { json.GetString(), json.GetLength() })) {
+		const hstring failedMsg = resourceLoader.GetString(L"Message_ExportScalingModesFailed");
+		ToastService::Get().ShowMessageInApp({}, failedMsg.c_str());
+	}
 }
 
-static bool ImportImpl(bool legacy) noexcept {
+fire_and_forget ScalingModesViewModel::Import() {
+	const ResourceLoader resourceLoader =
+		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
+	const hstring title = resourceLoader.GetString(L"Dialog_Import_Title");
+	const hstring jsonFileStr = resourceLoader.GetString(L"Dialog_JsonFile");
+
+	auto weakThis = get_weak();
+
+	// 在主线程使用 IFileOpenDialog 有些问题，尤其在 Win10 中
+	co_await resume_background();
+
 	com_ptr<IFileOpenDialog> fileDialog = try_create_instance<IFileOpenDialog>(CLSID_FileOpenDialog);
 	if (!fileDialog) {
 		Logger::Get().Error("创建 FileOpenDialog 失败");
-		return false;
+		co_return;
 	}
 
-	ResourceLoader resourceLoader =
-		ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID);
-	hstring title = resourceLoader.GetString(legacy ? L"Dialog_ImportLegacy_Title" : L"Dialog_Import_Title");
-	fileDialog->SetTitle(title.c_str());
-
-	std::optional<std::wstring> fileName = OpenFileDialogForJson(fileDialog.get());
+	std::optional<std::filesystem::path> fileName =
+		OpenFileDialogForJson(fileDialog.get(), title.c_str(), jsonFileStr.c_str());
 	if (!fileName.has_value()) {
-		return false;
+		co_return;
 	}
 	if (fileName->empty()) {
-		return true;
+		co_return;
 	}
 
 	std::string json;
-	if (!Win32Helper::ReadTextFile(fileName->c_str(), json)) {
-		return false;
+	Win32Helper::ReadTextFile(fileName->c_str(), json);
+
+	co_await App::Get().Dispatcher();
+
+	if (!weakThis.get()) {
+		co_return;
 	}
 
-	rapidjson::Document doc;
-	// 导入时放宽 json 格式限制
-	doc.ParseInsitu<rapidjson::kParseCommentsFlag | rapidjson::kParseTrailingCommasFlag>(json.data());
-	if (doc.HasParseError()) {
-		Logger::Get().Error(fmt::format("解析缩放模式失败\n\t错误码: {}", (int)doc.GetParseError()));
-		return false;
+	if (!json.empty()) {
+		rapidjson::Document doc;
+		// 导入时放宽 json 格式限制
+		doc.ParseInsitu<rapidjson::kParseCommentsFlag | rapidjson::kParseTrailingCommasFlag>(json.data());
+		if (doc.HasParseError()) {
+			Logger::Get().Error(fmt::format("解析 json 失败\n\t错误码: {}", (int)doc.GetParseError()));
+		} else if (doc.IsObject() &&
+			ScalingModesService::Get().Import(((const rapidjson::Document&)doc).GetObj(), false)) {
+			// 导入成功
+			co_return;
+		}
 	}
 
-	if (legacy) {
-		return ScalingModesService::Get().ImportLegacy(doc);
-	}
-
-	if (!doc.IsObject()) {
-		return false;
-	}
-
-	return ScalingModesService::Get().Import(((const rapidjson::Document&)doc).GetObj(), false);
-}
-
-void ScalingModesViewModel::_Import(bool legacy) {
-	ShowErrorMessage(false);
-	if (!ImportImpl(legacy)) {
-		ShowErrorMessage(true);
-	}
+	const hstring failedMsg = resourceLoader.GetString(L"Message_ImportScalingModesFailed");
+	ToastService::Get().ShowMessageInApp({}, failedMsg.c_str());
 }
 
 void ScalingModesViewModel::PrepareForAdd() {

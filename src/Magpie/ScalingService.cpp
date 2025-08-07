@@ -7,7 +7,6 @@
 #include "ProfileService.h"
 #include "ScalingMode.h"
 #include "ScalingModesService.h"
-#include "ScalingRuntime.h"
 #include "ScalingService.h"
 #include "ShortcutService.h"
 #include "ToastService.h"
@@ -31,6 +30,10 @@ ScalingService& ScalingService::Get() noexcept {
 ScalingService::~ScalingService() {}
 
 void ScalingService::Initialize() {
+	_scalingRuntime.emplace();
+	_scalingRuntime->StateChanged(
+		std::bind_front(&ScalingService::_ScalingRuntime_StateChanged, this));
+
 	_countDownTimer.Interval(25ms);
 	_countDownTimer.Tick({ this, &ScalingService::_CountDownTimer_Tick });
 
@@ -39,10 +42,6 @@ void ScalingService::Initialize() {
 		50ms
 	);
 	
-	_scalingRuntime = std::make_unique<ScalingRuntime>();
-	_scalingRuntime->IsScalingChanged(
-		std::bind_front(&ScalingService::_ScalingRuntime_IsScalingChanged, this));
-
 	_shortcutActivatedRevoker = ShortcutService::Get().ShortcutActivated(
 		auto_revoke, std::bind_front(&ScalingService::_ShortcutService_ShortcutPressed, this));
 
@@ -51,26 +50,27 @@ void ScalingService::Initialize() {
 }
 
 void ScalingService::Uninitialize() {
-	if (!_checkForegroundTimer) {
+	if (!_scalingRuntime) {
 		return;
 	}
 
-	_checkForegroundTimer.Cancel();
+	if (_checkForegroundTimer) {
+		_checkForegroundTimer.Cancel();
+	}
+	
 	_countDownTimer.Stop();
 	_scalingRuntime.reset();
 
 	_shortcutActivatedRevoker.Revoke();
 }
 
-void ScalingService::StartTimer() {
-	if (_curCountdownSeconds != 0) {
-		return;
-	}
-
+void ScalingService::StartTimer(bool windowedMode) {
 	_curCountdownSeconds = AppSettings::Get().CountdownSeconds();
+	_isCurCountdownWindowedMode = windowedMode;
 	_timerStartTimePoint = std::chrono::steady_clock::now();
+	// 如果计时器已经启动会被重置，这正是我们想要的
 	_countDownTimer.Start();
-	IsTimerOnChanged.Invoke(true);
+	IsTimerOnChanged.Invoke(true, windowedMode);
 }
 
 void ScalingService::StopTimer() {
@@ -80,14 +80,14 @@ void ScalingService::StopTimer() {
 
 	_curCountdownSeconds = 0;
 	_countDownTimer.Stop();
-	IsTimerOnChanged.Invoke(false);
+	IsTimerOnChanged.Invoke(false, _isCurCountdownWindowedMode);
 }
 
 double ScalingService::SecondsLeft() const noexcept {
 	using namespace std::chrono;
 
 	if (!IsTimerOn()) {
-		return 0.0;
+		return std::numeric_limits<double>::max();
 	}
 
 	// DispatcherTimer 误差很大，因此我们自己计算剩余时间
@@ -97,7 +97,8 @@ double ScalingService::SecondsLeft() const noexcept {
 }
 
 bool ScalingService::IsScaling() const noexcept {
-	return _scalingRuntime && _scalingRuntime->IsScaling();
+	// 等待状态视为未缩放
+	return _scalingRuntime->State() == ScalingState::Scaling;
 }
 
 void ScalingService::CheckForeground() {
@@ -106,18 +107,14 @@ void ScalingService::CheckForeground() {
 }
 
 void ScalingService::_ShortcutService_ShortcutPressed(ShortcutAction action) {
-	if (!_scalingRuntime) {
-		return;
-	}
-
 	switch (action) {
 	case ShortcutAction::Scale:
 	case ShortcutAction::WindowedModeScale:
 	{
 		const bool isWindowdMode = action == ShortcutAction::WindowedModeScale;
 
-		if (_scalingRuntime->IsScaling()) {
-			_scalingRuntime->SwitchScalingState(isWindowdMode);
+		if (_scalingRuntime->State() == ScalingState::Scaling) {
+			_scalingRuntime->ToggleScaling(isWindowdMode);
 		} else {
 			_ScaleForegroundWindow(isWindowdMode);
 		}
@@ -126,10 +123,7 @@ void ScalingService::_ShortcutService_ShortcutPressed(ShortcutAction action) {
 	}
 	case ShortcutAction::Toolbar:
 	{
-		if (_scalingRuntime->IsScaling()) {
-			_scalingRuntime->SwitchToolbarState();
-			return;
-		}
+		_scalingRuntime->SwitchToolbarState();
 		break;
 	}
 	default:
@@ -138,12 +132,17 @@ void ScalingService::_ShortcutService_ShortcutPressed(ShortcutAction action) {
 }
 
 void ScalingService::_CountDownTimer_Tick(winrt::IInspectable const&, winrt::IInspectable const&) {
-	double timeLeft = SecondsLeft();
+	// 以防在 Uninitialize 或取消计时后执行
+	if (!_scalingRuntime || !IsTimerOn()) {
+		return;
+	}
+
+	const double timeLeft = SecondsLeft();
 
 	// 剩余时间在 10 ms 以内计时结束
 	if (timeLeft < 0.01) {
 		StopTimer();
-		_ScaleForegroundWindow(false);
+		_ScaleForegroundWindow(_isCurCountdownWindowedMode);
 		return;
 	}
 
@@ -164,6 +163,10 @@ static void ShowError(HWND hWnd, ScalingError error) noexcept {
 		break;
 	case ScalingError::Windowed3DGameMode:
 		key = L"Message_Windowed3DGameMode";
+		isFail = false;
+		break;
+	case ScalingError::WindowedDesktopDuplication:
+		key = L"Message_WindowedDesktopDuplication";
 		isFail = false;
 		break;
 	case ScalingError::InvalidSourceWindow:
@@ -206,25 +209,26 @@ static void ShowError(HWND hWnd, ScalingError error) noexcept {
 }
 
 static bool IsReadyForScaling(HWND hwndFore) noexcept {
-	// GH#538
-	// 窗口还原过程中存在中间状态：虽然已经成为前台窗口，但仍是最小化的
-	if (Win32Helper::GetWindowShowCmd(hwndFore) == SW_SHOWMINIMIZED) {
+	// GH#1148
+	// 有些游戏刚启动时将窗口创建在屏幕外，初始化完成后再移到屏幕内
+	if (!MonitorFromWindow(hwndFore, MONITOR_DEFAULTTONULL)) {
 		return false;
 	}
 
-	// GH#1148
-	// 有些游戏刚启动时将窗口创建在屏幕外，初始化完成后再移到屏幕内
-	return MonitorFromWindow(hwndFore, MONITOR_DEFAULTTONULL) != NULL;
+	// GH#1200
+	// 有些游戏加载时不响应消息，应等待加载完成
+	return !Win32Helper::IsWindowHung(hwndFore);
 }
 
 fire_and_forget ScalingService::_CheckForegroundTimer_Tick(ThreadPoolTimer const& timer) {
-	if (!_scalingRuntime || _scalingRuntime->IsScaling()) {
-		co_return;
-	}
-
 	if (timer) {
 		// ThreadPoolTimer 在后台线程触发
 		co_await App::Get().Dispatcher();
+	}
+
+	// ThreadPoolTimer 是异步的，Uninitialize 后仍可能执行
+	if (!_scalingRuntime) {
+		co_return;
 	}
 
 	const HWND hwndFore = GetForegroundWindow();
@@ -232,37 +236,41 @@ fire_and_forget ScalingService::_CheckForegroundTimer_Tick(ThreadPoolTimer const
 		co_return;
 	}
 
-	// 如果窗口处于某种中间状态则跳过此次检查
-	if (!IsReadyForScaling(hwndFore)) {
-		co_return;
+	// 检查 _hwndCurSrc 使得缩放或等待状态下避免再次缩放源窗口
+	if (hwndFore != _hwndCurSrc) {
+		// 检查自动缩放
+		if (const Profile* profile = ProfileService::Get().GetProfileForWindow(hwndFore, true)) {
+			// 如果窗口处于某种中间状态则跳过此次检查
+			if (!IsReadyForScaling(hwndFore)) {
+				co_return;
+			}
+
+			// 自动缩放可以终止当前缩放
+			_StartScale(hwndFore, *profile, profile->autoScale == AutoScale::Windowed, true);
+		}
 	}
 
 	// 避免重复检查
 	_hwndChecked = hwndFore;
-
-	// 检查自动缩放
-	if (const Profile* profile = ProfileService::Get().GetProfileForWindow(hwndFore, true)) {
-		_StartScale(hwndFore, *profile, profile->autoScale == AutoScale::Windowed);
-	}
 }
 
-void ScalingService::_ScalingRuntime_IsScalingChanged(bool value) {
+void ScalingService::_ScalingRuntime_StateChanged(ScalingState value) {
 	App::Get().Dispatcher().RunAsync(CoreDispatcherPriority::Normal, [this, value]() {
-		if (value) {
+		if (value == ScalingState::Scaling) {
 			StopTimer();
-		} else {
+		} else if (value == ScalingState::Idle) {
+			// 缩放结束后源窗口位于前台则不要检查自动缩放，用户可能刚通过快捷键或
+			// 工具栏终止缩放。_CheckForegroundTimer_Tick 也实现了类似功能，但它
+			// 的触发频率较低，容易错过时机。
 			if (GetForegroundWindow() == _hwndCurSrc) {
-				// 退出全屏后如果前台窗口不变视为通过热键退出
 				_hwndChecked = _hwndCurSrc;
 			}
 
+			// 缩放结束后清空 _hwndCurSrc，等待状态下则保留
 			_hwndCurSrc = NULL;
-
-			// 立即检查前台窗口
-			_CheckForegroundTimer_Tick(nullptr);
 		}
 
-		IsScalingChanged.Invoke(value);
+		IsScalingChanged.Invoke(value == ScalingState::Scaling);
 	});
 }
 
@@ -273,21 +281,25 @@ void ScalingService::_ScaleForegroundWindow(bool windowedMode) {
 	}
 
 	const Profile& profile = *ProfileService::Get().GetProfileForWindow(hWnd, false);
-	_StartScale(hWnd, profile, windowedMode);
+	_StartScale(hWnd, profile, windowedMode, false);
 }
 
-void ScalingService::_StartScale(HWND hWnd, const Profile& profile, bool windowedMode) {
+void ScalingService::_StartScale(HWND hWnd, const Profile& profile, bool windowedMode, bool force) {
 	assert(hWnd);
 
-	const ScalingError error = _StartScaleImpl(hWnd, profile, windowedMode);
+	const ScalingError error = _StartScaleImpl(hWnd, profile, windowedMode, force);
 	if (error != ScalingError::NoError) {
 		ShowError(hWnd, error);
 	}
 }
 
-ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, bool windowedMode) {
+ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, bool windowedMode, bool force) {
+	// ScalingRuntime::Start 会检查是否正在缩放，这里提前检查以避免无效操作
+	if (!force && _scalingRuntime->State() == ScalingState::Scaling) {
+		return ScalingError::NoError;
+	}
+
 	if (WindowHelper::IsForbiddenSystemWindow(hWnd)) {
-		// 不显示错误
 		return ScalingError::NoError;
 	}
 
@@ -350,7 +362,7 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 			options.initialWindowedScaleFactor = 1.5f;
 			break;
 		case InitialWindowedScaleFactor::x1_75:
-			options.initialWindowedScaleFactor = 1.5f;
+			options.initialWindowedScaleFactor = 1.75f;
 			break;
 		case InitialWindowedScaleFactor::x2:
 			options.initialWindowedScaleFactor = 2.0f;
@@ -417,6 +429,7 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 	options.IsStatisticsForDynamicDetectionEnabled(settings.IsStatisticsForDynamicDetectionEnabled());
 	options.IsInlineParams(settings.IsInlineParams());
 	options.IsFP16Disabled(settings.IsFP16Disabled());
+	options.IsKeepOnTop(settings.IsKeepOnTop());
 
 	if (options.maxFrameRate) {
 		// 最小帧数不能大于最大帧数
@@ -425,7 +438,8 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 		options.minFrameRate = settings.MinFrameRate();
 	}
 
-	options.initialToolbarState = settings.InitialToolbarState();
+	options.fullscreenInitialToolbarState = settings.FullscreenInitialToolbarState();
+	options.windowedInitialToolbarState = settings.WindowedInitialToolbarState();
 	options.screenshotsDir = settings.ScreenshotsDir();
 	if (options.screenshotsDir.empty()) {
 		// 回落到使用当前目录
@@ -450,7 +464,7 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 		);
 	};
 
-	if (!_scalingRuntime->Start(hWnd, std::move(options))) {
+	if (!_scalingRuntime->Start(hWnd, std::move(options), force)) {
 		return ScalingError::ScalingFailedGeneral;
 	}
 

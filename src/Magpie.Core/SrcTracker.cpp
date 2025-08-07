@@ -1,12 +1,12 @@
 #include "pch.h"
 #include "SrcTracker.h"
-#include "Win32Helper.h"
 #include "Logger.h"
+#include "SmallVector.h"
+#include "Win32Helper.h"
 #ifdef _DEBUG
 #include "WindowHelper.h"
 #endif
 #include <dwmapi.h>
-#include "SmallVector.h"
 #include <ShellScalingApi.h>
 
 namespace Magpie {
@@ -37,10 +37,21 @@ static bool CheckIL(HWND hwndSrc) noexcept {
 	return GetWindowIntegrityLevel(hwndSrc, windowIL) && windowIL <= thisIL;
 }
 
-ScalingError SrcTracker::Set(HWND hWnd, const ScalingOptions& options) noexcept {
-	_hWnd = hWnd;
-	_isMoving = false;
+static bool IsWindowMoving(HWND hWnd) noexcept {
+	GUITHREADINFO guiThreadInfo{ .cbSize = sizeof(GUITHREADINFO) };
+	if (GetGUIThreadInfo(GetWindowThreadProcessId(hWnd, nullptr), &guiThreadInfo)) {
+		return guiThreadInfo.flags & GUI_INMOVESIZE;
+	} else {
+		Logger::Get().Win32Error("GetGUIThreadInfo 失败");
+		return false;
+	}
+}
 
+ScalingError SrcTracker::Set(HWND hWnd, const ScalingOptions& options, bool& isInvisibleOrMinimized) noexcept {
+	assert(!isInvisibleOrMinimized);
+
+	_hWnd = hWnd;
+	
 	// 这里不检查源窗口是否挂起，将在创建缩放窗口前检查
 
 	if (!IsWindow(_hWnd)) {
@@ -48,10 +59,20 @@ ScalingError SrcTracker::Set(HWND hWnd, const ScalingOptions& options) noexcept 
 		return ScalingError::InvalidSourceWindow;
 	}
 
+	// 不可见和最小化的窗口将等待源窗口状态改变，这里提前返回。注意 showCmd 不能准确
+	// 判断窗口可见性，应使用 IsWindowVisible。
 	if (!IsWindowVisible(_hWnd)) {
-		Logger::Get().Error("不支持缩放隐藏的窗口");
-		return ScalingError::InvalidSourceWindow;
+		isInvisibleOrMinimized = true;
+		return ScalingError::NoError;
 	}
+
+	const UINT showCmd = Win32Helper::GetWindowShowCmd(hWnd);
+	if (showCmd == SW_SHOWMINIMIZED) {
+		isInvisibleOrMinimized = true;
+		return ScalingError::NoError;
+	}
+
+	_isMaximized = showCmd == SW_SHOWMAXIMIZED;
 
 	if (Win32Helper::GetWindowClassName(hWnd) == L"Ghost") {
 		Logger::Get().Error("不支持缩放幽灵窗口");
@@ -77,7 +98,11 @@ ScalingError SrcTracker::Set(HWND hWnd, const ScalingOptions& options) noexcept 
 		return ScalingError::InvalidSourceWindow;
 	}
 
-	_isFocused = GetForegroundWindow() == hWnd;
+	const HWND hwndFore = GetForegroundWindow();
+	_isFocused = hwndFore == hWnd;
+	_UpdateIsOwnedWindowFocused(hwndFore);
+
+	_isMoving = IsWindowMoving(_hWnd);
 
 	if (!GetWindowRect(hWnd, &_windowRect)) {
 		Logger::Get().Win32Error("GetWindowRect 失败");
@@ -96,14 +121,6 @@ ScalingError SrcTracker::Set(HWND hWnd, const ScalingOptions& options) noexcept 
 		Logger::Get().Win32Error("GetClientScreenRect 失败");
 		return ScalingError::ScalingFailedGeneral;
 	}
-
-	const UINT showCmd = Win32Helper::GetWindowShowCmd(hWnd);
-	if (showCmd == SW_SHOWMINIMIZED) {
-		Logger::Get().Error("不支持缩放最小化的窗口");
-		return ScalingError::InvalidSourceWindow;
-	}
-
-	_isMaximized = showCmd == SW_SHOWMAXIMIZED;
 
 	// 计算窗口样式
 	BOOL hasBorder = TRUE;
@@ -169,88 +186,106 @@ bool SrcTracker::UpdateState(
 	HWND hwndFore,
 	bool isWindowedMode,
 	bool isResizingOrMoving,
-	bool& srcRectChanged,
-	bool& srcSizeChanged,
-	bool& srcMovingChanged
+	bool& isInvisibleOrMinimized,
+	bool& focusedChanged,
+	bool& ownedWindowFocusedChanged,
+	bool& rectChanged,
+	bool& sizeChanged,
+	bool& movingChanged
 ) noexcept {
-	assert(!srcRectChanged && !srcSizeChanged && !srcMovingChanged);
+	assert(!isInvisibleOrMinimized && !focusedChanged && !ownedWindowFocusedChanged &&
+		!rectChanged && !sizeChanged && !movingChanged);
 
 	if (!IsWindow(_hWnd)) {
-		Logger::Get().Error("源窗口已销毁");
+		Logger::Get().Info("源窗口已销毁");
 		return false;
 	}
 
-	if (!IsWindowVisible(_hWnd)) {
-		Logger::Get().Error("源窗口已隐藏");
-		return false;
-	}
+	isInvisibleOrMinimized = !IsWindowVisible(_hWnd);
 
 	// Win32Helper::IsWindowHung 更准确，但它会向源窗口发送消息，比较耗时。
 	// IsHungAppWindow 的另一个好处是它不如 Win32Helper::IsWindowHung 严
 	// 格，因此即使源窗口挂起一段时间，只要用户不做额外的操作就不会结束缩放，
 	// 直到源窗口被替换为幽灵窗口。
 	if (IsHungAppWindow(_hWnd)) {
-		Logger::Get().Error("源窗口已挂起");
+		Logger::Get().Info("源窗口已挂起");
 		return false;
 	}
 
-	_isFocused = hwndFore == _hWnd;
+	if (_isFocused != (hwndFore == _hWnd)) {
+		_isFocused = !_isFocused;
+		focusedChanged = true;
+	}
+
+	ownedWindowFocusedChanged = _UpdateIsOwnedWindowFocused(hwndFore);
 
 	const bool oldMaximized = _isMaximized;
-	UINT showCmd = Win32Helper::GetWindowShowCmd(_hWnd);
-	if (showCmd == SW_SHOWMINIMIZED) {
-		Logger::Get().Error("源窗口处于最小化状态");
+
+	WINDOWPLACEMENT wp{ sizeof(wp) };
+	if (!GetWindowPlacement(_hWnd, &wp)) {
+		Logger::Get().Win32Error("GetWindowPlacement 失败");
 		return false;
 	}
-	_isMaximized = showCmd == SW_SHOWMAXIMIZED;
+
+	_isMaximized = wp.showCmd == SW_SHOWMAXIMIZED;
 
 	RECT curWindowRect;
-	if (!GetWindowRect(_hWnd, &curWindowRect)) {
-		Logger::Get().Win32Error("GetWindowRect 失败");
-		return false;
+	if (wp.showCmd == SW_SHOWMINIMIZED) {
+		isInvisibleOrMinimized = true;
+
+		// rcNormalPosition 使用工作区坐标，应转换为屏幕坐标
+		HMONITOR hMon = MonitorFromWindow(_hWnd, MONITOR_DEFAULTTOPRIMARY);
+		MONITORINFO mi{ sizeof(mi) };
+		if (!GetMonitorInfo(hMon, &mi)) {
+			Logger::Get().Win32Error("GetMonitorInfo 失败");
+			return false;
+		}
+
+		curWindowRect = wp.rcNormalPosition;
+		Win32Helper::OffsetRect(
+			curWindowRect, mi.rcWork.left - mi.rcMonitor.left, mi.rcWork.top - mi.rcMonitor.top);
+	} else {
+		if (!GetWindowRect(_hWnd, &curWindowRect)) {
+			Logger::Get().Win32Error("GetWindowRect 失败");
+			return false;
+		}
 	}
 
-	srcSizeChanged = oldMaximized != _isMaximized ||
+	sizeChanged = oldMaximized != _isMaximized ||
 		Win32Helper::GetSizeOfRect(curWindowRect) != Win32Helper::GetSizeOfRect(_windowRect);
+	if (sizeChanged) {
+		rectChanged = true;
+		return true;
+	}
 
 	// 缩放窗口正在调整大小或被拖动时源窗口的移动是异步的，暂时不检查源窗口是否移动
 	if (isResizingOrMoving) {
-		srcRectChanged = oldMaximized != _isMaximized;
+		rectChanged = oldMaximized != _isMaximized;
 		return true;
 	}
 
 	// 最大化状态改变视为尺寸发生变化
-	srcRectChanged = oldMaximized != _isMaximized || curWindowRect != _windowRect;
+	rectChanged = oldMaximized != _isMaximized || curWindowRect != _windowRect;
 	
-	if (isWindowedMode && !srcSizeChanged) {
-		bool isMoving = false;
-		GUITHREADINFO guiThreadInfo{ .cbSize = sizeof(GUITHREADINFO) };
-		if (GetGUIThreadInfo(GetWindowThreadProcessId(_hWnd, nullptr), &guiThreadInfo)) {
-			isMoving = guiThreadInfo.flags & GUI_INMOVESIZE;
-		} else {
-			Logger::Get().Win32Error("GetGUIThreadInfo 失败");
-		}
-
-		// 处理自己实现拖拽逻辑的窗口：将鼠标左键按下视为开始拖拽，释放视为拖拽结束。
-		// 可能会有误判，但幸好后果不太严重。
-		if (_isMoving || (!_isMoving && srcRectChanged)) {
-			isMoving = isMoving || IsPrimaryMouseButtonDown();
-		}
-
-		if (srcRectChanged) {
+	if (isWindowedMode && !sizeChanged) {
+		if (rectChanged) {
 			const LONG offsetX = curWindowRect.left - _windowRect.left;
 			const LONG offsetY = curWindowRect.top - _windowRect.top;
 			Win32Helper::OffsetRect(_windowFrameRect, offsetX, offsetY);
 			Win32Helper::OffsetRect(_srcRect, offsetX, offsetY);
 		}
 
+		// 处理自己实现拖拽逻辑的窗口：将鼠标左键按下视为开始拖拽，释放视为拖拽结束。
+		// 可能会有误判，但幸好后果不太严重。
+		const bool isMoving = !isInvisibleOrMinimized &&
+			(IsWindowMoving(_hWnd) || (rectChanged && IsPrimaryMouseButtonDown()));
 		if (_isMoving != isMoving) {
-			srcMovingChanged = true;
+			movingChanged = true;
 			_isMoving = isMoving;
 		}
 	}
 	
-	if (srcRectChanged) {
+	if (rectChanged) {
 		_windowRect = curWindowRect;
 	}
 	
@@ -410,14 +445,26 @@ static bool GetClientRectOfUWP(HWND hWnd, RECT& rect) noexcept {
 	return true;
 }
 
+bool SrcTracker::SetFocus() const noexcept {
+	if (_isOwnedWindowFocused) {
+		return true;
+	}
+
+	// 如果源窗口存在弹窗（即被源窗口所有的窗口），应把弹窗设为前台窗口
+	const HWND hwndPopup = GetWindow(_hWnd, GW_ENABLEDPOPUP);
+	return SetForegroundWindow(hwndPopup ? hwndPopup : _hWnd);
+}
+
 ScalingError SrcTracker::_CalcSrcRect(const ScalingOptions& options, LONG borderThicknessInFrame) noexcept {
 	if (_windowKind == SrcWindowKind::NoDecoration) {
 		// NoDecoration 类型的窗口不裁剪非客户区。它们要么没有非客户区，要么非客户区不是由
 		// DWM 绘制，前者无需裁剪，后者不能裁剪。
 		_srcRect = _windowRect;
 	} else {
+		const bool isCaptureTitleBar = options.RealIsCaptureTitleBar();
+		
 		// UWP 窗口都是 NoTitleBar 类型，但可能使用子窗口作为“客户区”
-		if (_windowKind == SrcWindowKind::NoTitleBar && !options.IsCaptureTitleBar() && GetClientRectOfUWP(_hWnd, _srcRect)) {
+		if (_windowKind == SrcWindowKind::NoTitleBar && !isCaptureTitleBar && GetClientRectOfUWP(_hWnd, _srcRect)) {
 			_srcRect.top = std::max(_srcRect.top, _windowFrameRect.top + borderThicknessInFrame);
 		} else {
 			_srcRect.left = _windowFrameRect.left + borderThicknessInFrame;
@@ -425,7 +472,7 @@ ScalingError SrcTracker::_CalcSrcRect(const ScalingOptions& options, LONG border
 			_srcRect.right = _windowFrameRect.right - borderThicknessInFrame;
 			_srcRect.bottom = _windowFrameRect.bottom - borderThicknessInFrame;
 
-			if (!options.IsCaptureTitleBar() || _windowKind == SrcWindowKind::OnlyThickFrame) {
+			if (!isCaptureTitleBar || _windowKind == SrcWindowKind::OnlyThickFrame) {
 				RECT clientRect;
 				if (!Win32Helper::GetClientScreenRect(_hWnd, clientRect)) {
 					Logger::Get().Error("GetClientScreenRect 失败");
@@ -469,6 +516,29 @@ ScalingError SrcTracker::_CalcSrcRect(const ScalingOptions& options, LONG border
 	}
 
 	return ScalingError::NoError;
+}
+
+static bool IsOwnedWindow(HWND hwndOwner, HWND hwndTest) noexcept {
+	HWND hwndCur = hwndTest;
+	while (bool(hwndCur = GetWindowOwner(hwndCur))) {
+		if (hwndCur == hwndOwner) {
+			return true;
+		}
+	}
+	return false;
+}
+
+bool SrcTracker::_UpdateIsOwnedWindowFocused(HWND hwndFore) noexcept {
+	// 支持两种形式的弹窗
+	// 1. 弹窗被源窗口所有
+	// 2. 弹窗没有被源窗口所有，但弹出时源窗口被禁用
+	bool newValue = !_isFocused && (IsOwnedWindow(_hWnd, hwndFore) || !IsWindowEnabled(_hWnd));
+	if (_isOwnedWindowFocused == newValue) {
+		return false;
+	} else {
+		_isOwnedWindowFocused = newValue;
+		return true;
+	}
 }
 
 }

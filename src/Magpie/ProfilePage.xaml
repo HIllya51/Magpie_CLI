@@ -184,9 +184,14 @@
 					          ItemsSource="{x:Bind ViewModel.CaptureMethods, Mode=OneTime}"
 					          SelectedIndex="{x:Bind ViewModel.CaptureMethod, Mode=TwoWay}" />
 				</local:SettingsCard>
+				<muxc:InfoBar x:Uid="Profile_General_DesktopDuplicationWarning"
+				              IsClosable="False"
+				              IsOpen="{x:Bind ViewModel.IsCaptureMethodDesktopDuplication, Mode=OneWay}"
+				              Severity="Warning" />
 				<local:SettingsCard x:Name="AutoScaleSettingsCard"
 				                    x:Uid="Profile_General_AutoScale"
-				                    x:Load="{x:Bind ViewModel.IsNotDefaultProfile, Mode=OneTime}">
+				                    x:Load="{x:Bind ViewModel.IsNotDefaultProfile, Mode=OneTime}"
+				                    IsWrapEnabled="True">
 					<local:SettingsCard.HeaderIcon>
 						<FontIcon Glyph="&#xE945;" />
 					</local:SettingsCard.HeaderIcon>
@@ -220,7 +225,8 @@
 				</local:SettingsCard>
 			</local:SettingsGroup>
 			<local:SettingsGroup x:Uid="Profile_WindowedScaling">
-				<local:SettingsCard x:Uid="Profile_WindowedScaling_InitialScaleFactor">
+				<local:SettingsCard x:Uid="Profile_WindowedScaling_InitialScaleFactor"
+				                    IsWrapEnabled="True">
 					<local:SettingsCard.HeaderIcon>
 						<FontIcon Glyph="&#xE740;" />
 					</local:SettingsCard.HeaderIcon>
@@ -334,7 +340,8 @@
 					</local:SettingsExpander.Content>
 					<local:SettingsExpander.Items>
 						<local:SettingsCard x:Uid="Profile_SourceWindow_CustomCropping_Left"
-						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}">
+						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}"
+						                    IsWrapEnabled="True">
 							<local:SimpleStackPanel Orientation="Horizontal"
 							                        Spacing="8">
 								<muxc:NumberBox Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -350,7 +357,8 @@
 							</local:SimpleStackPanel>
 						</local:SettingsCard>
 						<local:SettingsCard x:Uid="Profile_SourceWindow_CustomCropping_Right"
-						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}">
+						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}"
+						                    IsWrapEnabled="True">
 							<local:SimpleStackPanel Orientation="Horizontal"
 							                        Spacing="8">
 								<muxc:NumberBox Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -366,7 +374,8 @@
 							</local:SimpleStackPanel>
 						</local:SettingsCard>
 						<local:SettingsCard x:Uid="Profile_SourceWindow_CustomCropping_Top"
-						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}">
+						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}"
+						                    IsWrapEnabled="True">
 							<local:SimpleStackPanel Orientation="Horizontal"
 							                        Spacing="8">
 								<muxc:NumberBox Foreground="{ThemeResource TextFillColorPrimaryBrush}"
@@ -382,7 +391,8 @@
 							</local:SimpleStackPanel>
 						</local:SettingsCard>
 						<local:SettingsCard x:Uid="Profile_SourceWindow_CustomCropping_Bottom"
-						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}">
+						                    IsEnabled="{x:Bind ViewModel.IsCroppingEnabled, Mode=OneWay}"
+						                    IsWrapEnabled="True">
 							<local:SimpleStackPanel Orientation="Horizontal"
 							                        Spacing="8">
 								<muxc:NumberBox Foreground="{ThemeResource TextFillColorPrimaryBrush}"

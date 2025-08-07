@@ -132,14 +132,8 @@
   <data name="Home_Activation.Header" xml:space="preserve">
     <value>Attivazione</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Ridimensiona la finestra in primo piano allo scadere del timer</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>Ridimensionamento ritardato</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>Ridimensiona dopo {}s</value>
   </data>
   <data name="Home_Activation_Timer_Delay.Header" xml:space="preserve">
     <value>Ritardo in secondi</value>
@@ -206,9 +200,6 @@
   </data>
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>Importa</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>Importa ScaleModels.json</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Altre opzioni</value>
@@ -456,12 +447,6 @@
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Description" xml:space="preserve">
     <value>Le notifiche e i popup di determinate applicazioni verranno bloccati</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>Devi attivare "Visualizza l'app nell'area notifiche" per utilizzare questa impostazione</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Riduci a icona nella barra delle notifiche all'avvio</value>
-  </data>
   <data name="Home_Advanced_InlineParams.Header" xml:space="preserve">
     <value>Mette i parametri dell'effetto in linea</value>
   </data>
@@ -504,9 +489,6 @@
   </data>
   <data name="ScalingModes_HasUnkownEffects.Title" xml:space="preserve">
     <value>Alcuni effetti non possono essere analizzati</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>Importa ScaleModels.json</value>
   </data>
   <data name="About_Version_UpdateSettings.Header" xml:space="preserve">
     <value>Impostazioni aggiornamenti</value>
@@ -678,9 +660,6 @@
   </data>
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>Riordina</value>
-  </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>Analisi non riuscita</value>
   </data>
   <data name="About_Version_UpdateCard_DownloadAndInstall.Content" xml:space="preserve">
     <value>Scarica e installa</value>

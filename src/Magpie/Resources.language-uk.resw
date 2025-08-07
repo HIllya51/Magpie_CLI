@@ -132,9 +132,6 @@
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>Головна</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Масштабування вікна переднього плану після закінчення таймера</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>Відкладене масштабування</value>
   </data>
@@ -209,9 +206,6 @@
   </data>
   <data name="ScalingModes_General_Export.Text" xml:space="preserve">
     <value>Експорт</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>Імпортувати ScaleModels.json</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Додаткові параметри</value>
@@ -384,9 +378,6 @@
   <data name="Profile_MoreOptions_ReorderFlyout_MoveDown.Text" xml:space="preserve">
     <value>Перемістити вниз</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>Помилка синтаксичного аналізу</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>Немає</value>
   </data>
@@ -486,12 +477,6 @@
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Description" xml:space="preserve">
     <value>Сповіщення та спливаючі вікна певних застосунків будуть заблоковані</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>Для використання цього параметра потрібно ввімкнути "Відображати застосунок в системному треї"</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Згортання в системний трей під час запуску</value>
-  </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>Помилка</value>
   </data>
@@ -519,9 +504,6 @@
   </data>
   <data name="NotifyIcon_Exit" xml:space="preserve">
     <value>Вихід</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>Масштабування після {}с</value>
   </data>
   <data name="Home_Activation_Timer_Cancel" xml:space="preserve">
     <value>Скасувати</value>
@@ -678,9 +660,6 @@
   </data>
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>Імпорт режимів масштабування</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>Імпорт ScaleModels.json</value>
   </data>
   <data name="About_Version_UpdateSettings.Header" xml:space="preserve">
     <value>Оновлення налаштувань</value>

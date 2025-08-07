@@ -126,9 +126,6 @@
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>タイマー</value>
   </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>{}秒後にスケーリング</value>
-  </data>
   <data name="Home_Activation_Timer_Delay.Header" xml:space="preserve">
     <value>カウントダウンタイム</value>
   </data>
@@ -202,7 +199,7 @@
     <value>バイリニア法</value>
   </data>
   <data name="Profile_Cursor_DrawCursor_Interpolation_NearestNeighbor.Content" xml:space="preserve">
-    <value>最近傍法</value>
+    <value>ニアレストネイバー法</value>
   </data>
   <data name="ShortcutDialog_Save" xml:space="preserve">
     <value>保存</value>
@@ -218,9 +215,6 @@
   </data>
   <data name="Profile_Advanced_DisableDirectFlip.Header" xml:space="preserve">
     <value>DirectFlipを無効にする</value>
-  </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>タイマー終了後、最前面ウィンドウをスケーリングする</value>
   </data>
   <data name="ShortcutDialog_Description.Text" xml:space="preserve">
     <value>このショートカットを変更するには、キーの組み合わせを押してください</value>
@@ -263,9 +257,6 @@
   </data>
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>インポート</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>古いバージョンのScaleModels.jsonをインポートする</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>その他のオプション</value>
@@ -399,9 +390,6 @@
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>並べ替え</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>解析に失敗しました</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>なし</value>
   </data>
@@ -478,10 +466,7 @@
     <value>スケーリング時に排他的な全画面表示をシミュレーションする</value>
   </data>
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Description" xml:space="preserve">
-    <value>特定アプリからの通知とポップアップをブロックできます</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>起動時、システムトレイに最小化</value>
+    <value>フルスクリーン・スケーリングにのみ適用されます。有効にすると、特定のアプリの通知やポップアップを抑制します</value>
   </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>エラー</value>
@@ -526,14 +511,8 @@
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>スケーリングモードのインポート</value>
   </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>古いバージョンのScaleModels.jsonをインポートする</value>
-  </data>
   <data name="Profile_Cursor_DrawCursor_ScaleFactor.Header" xml:space="preserve">
     <value>スケーリング倍率</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>この項目を使用するには、「システムトレイにアプリを表示する」をオンにする必要があります</value>
   </data>
   <data name="Profile_Cursor_DrawCursor_ScaleFactor_SameAsSourceWindow.Content" xml:space="preserve">
     <value>ソースウィンドウと同じ</value>
@@ -881,7 +860,7 @@
     <value>ウィンドウ・スケーリングのショートカット</value>
   </data>
   <data name="Home_Advanced_AllowScalingMaximized.Description" xml:space="preserve">
-    <value>フルスクリーンのスケーリングにのみ適用</value>
+    <value>フルスクリーン・スケーリングにのみ適用</value>
   </data>
   <data name="Home_Toolbar.Description" xml:space="preserve">
     <value>ツールバーはスケーリングされたウィンドウの上部に表示され、FPS表示やスクリーンショットキャプチャなどの機能を提供します。ウィンドウモードでは、スケーリングされたウィンドウをドラッグすることもできます。</value>
@@ -981,5 +960,47 @@
   </data>
   <data name="Home_TouchSupport_Warn.Title" xml:space="preserve">
     <value>ツールバーはタッチ入力に対応していません。</value>
+  </data>
+  <data name="Overlay_Toolbar_Close" xml:space="preserve">
+    <value>スケーリングの停止</value>
+  </data>
+  <data name="Overlay_Toolbar_Close_Description" xml:space="preserve">
+    <value>右クリックでツールバーを閉じる</value>
+  </data>
+  <data name="Overlay_Toolbar_SwitchToFullscreen" xml:space="preserve">
+    <value>フルスクリーン・スケーリングに切り替える</value>
+  </data>
+  <data name="Overlay_Toolbar_SwitchToWindowed" xml:space="preserve">
+    <value>ウィンドウ・スケーリングに切り替える</value>
+  </data>
+  <data name="Home_Toolbar_InitialState_Fullscreen.Header" xml:space="preserve">
+    <value>フルスクリーン・スケーリング</value>
+  </data>
+  <data name="Home_Toolbar_InitialState_Windowed.Header" xml:space="preserve">
+    <value>ウィンドウ・スケーリング</value>
+  </data>
+  <data name="Message_ExportScalingModesFailed" xml:space="preserve">
+    <value>スケーリングモードのエクスポートに失敗しました。</value>
+  </data>
+  <data name="Message_ImportScalingModesFailed" xml:space="preserve">
+    <value>スケーリングモードのインポートに失敗しました。</value>
+  </data>
+  <data name="Home_Advanced_DeveloperOptions_LocateLogs.Header" xml:space="preserve">
+    <value>ログの保存場所を開く</value>
+  </data>
+  <data name="Home_Advanced_KeepOnTop.Description" xml:space="preserve">
+    <value>フルスクリーン・スケーリングにのみ適用されます。有効にすると、スケーリングされたウィンドウが常に最前面に表示されるので邪魔が入りません。ただしメニューやポップアップが見えなくなることがあります。また、Multi-Plane OverlayをサポートしていないGPUでのレイテンシを短縮するのに役立ちます</value>
+  </data>
+  <data name="Home_Advanced_KeepOnTop.Header" xml:space="preserve">
+    <value>スケーリングされたウィンドウを常に最前面に表示</value>
+  </data>
+  <data name="Message_WindowedDesktopDuplication" xml:space="preserve">
+    <value>Desktop Duplication captureではウィンドウ・スケーリングはサポートされていません。</value>
+  </data>
+  <data name="Profile_General_DesktopDuplicationWarning.Title" xml:space="preserve">
+    <value>このキャプチャ方式は、ウィンドウ・スケーリングとは互換性がありません。</value>
+  </data>
+  <data name="Settings_Launch_RunAtStartup.Description" xml:space="preserve">
+    <value>「システムトレイにアプリを表示」を有効にすると、メインウィンドウが表示されません</value>
   </data>
 </root>

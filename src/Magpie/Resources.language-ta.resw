@@ -186,14 +186,8 @@
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>வீடு</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>நேரங்குறிகருவி முடிவடையும் போது முன்புற சாளரத்தை அளவிடவும்</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>தாமதமான அளவிடுதல்</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>{} S க்குப் பிறகு அளவு</value>
   </data>
   <data name="Home_Activation_Timer_Delay.Header" xml:space="preserve">
     <value>விநாடிகளில் நேரந்தவறுகை</value>
@@ -308,9 +302,6 @@
   </data>
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>இறக்குமதி</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>ச்கேமோடல்ச்.சோன் இறக்குமதி செய்யுங்கள்</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>மேலும் விருப்பங்கள்</value>
@@ -531,9 +522,6 @@
   <data name="About_Feedback.Header" xml:space="preserve">
     <value>கருத்து</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>பாகுபடுத்தல் தோல்வியடைந்தது</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>எதுவுமில்லை</value>
   </data>
@@ -663,12 +651,6 @@
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Header" xml:space="preserve">
     <value>அளவிடும்போது பிரத்யேக முழுத்திரனை உருவகப்படுத்துங்கள்</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>இந்த அமைப்பைப் பயன்படுத்த நீங்கள் "கணினி தட்டில் பயன்பாட்டைக் காண்பி" இயக்க வேண்டும்</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>தொடக்கத்தில் கணினி தட்டில் குறைக்கவும்</value>
-  </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>பிழை</value>
   </data>
@@ -723,9 +705,6 @@
   </data>
   <data name="NotifyIcon_MainWindow" xml:space="preserve">
     <value>முதன்மை சாளரம்</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>ச்கேமோடல்ச்.சோன் இறக்குமதி செய்யுங்கள்</value>
   </data>
   <data name="About_Version_UpdateSettings.Header" xml:space="preserve">
     <value>அமைப்புகளை புதுப்பிக்கவும்</value>

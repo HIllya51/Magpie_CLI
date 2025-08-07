@@ -229,14 +229,8 @@
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>Chính</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Scale cửa sổ trên cùng khi hết thời gian</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>Thời gian chờ Scale</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>Scale sau {} giây</value>
   </data>
   <data name="Home_Activation_Timer_Cancel" xml:space="preserve">
     <value>Hủy</value>
@@ -261,9 +255,6 @@
   </data>
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>Nhập các chế độ Scale</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>Nhập file ScaleModels.json</value>
   </data>
   <data name="Root_About.Content" xml:space="preserve">
     <value>Giới thiệu</value>
@@ -478,9 +469,6 @@
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>Nhập</value>
   </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>Nhập file ScaleModels.json</value>
-  </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Tùy chọn</value>
   </data>
@@ -489,9 +477,6 @@
   </data>
   <data name="ScalingModes_Parameters.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Thông số</value>
-  </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>Phân giải thất bại</value>
   </data>
   <data name="ScalingModes_AddEffect.Text" xml:space="preserve">
     <value>Thêm hiệu ứng</value>
@@ -699,12 +684,6 @@
   </data>
   <data name="Settings_Launch_RunAtStartup.Header" xml:space="preserve">
     <value>Chạy khi khởi động</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>Bạn cần bật "Hiển thị trên thanh tác vụ" để sử dụng cài đặt này</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Thu nhỏ về thanh tác vụ khi khởi động</value>
   </data>
   <data name="ShortcutDialog_Cancel" xml:space="preserve">
     <value>Hủy</value>

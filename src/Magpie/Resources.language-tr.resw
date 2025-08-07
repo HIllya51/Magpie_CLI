@@ -174,14 +174,8 @@
   <data name="Home_Activation.Header" xml:space="preserve">
     <value>Aktivasyon</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Zamanlayıcı sona erdiğinde ön plandaki pencereyi ölçeklendir</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>Gecikmeli ölçek</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>{}s sonra ölçekle</value>
   </data>
   <data name="Home_Activation_Timer_Cancel" xml:space="preserve">
     <value>İptal</value>
@@ -290,9 +284,6 @@
   </data>
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>İçeri aktar</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>İçeri aktar ScaleModels.json</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Diğer seçenekler</value>
@@ -453,9 +444,6 @@
   <data name="Profile_MoreOptions_ReorderFlyout_MoveUp.Text" xml:space="preserve">
     <value>Yukarı taşı</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>Ayrıştırma başarısız</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>Yok</value>
   </data>
@@ -576,12 +564,6 @@
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Header" xml:space="preserve">
     <value>Ölçekleme sırasında orjinal tam ekranı taklit edin</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>Bu ayarı kullanmak için "Uygulamayı sistem tepsisinde görüntüle" özelliğini açmanız gerekir</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Başlangıçta sistem tepsisine küçült</value>
-  </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>Hata</value>
   </data>
@@ -642,9 +624,6 @@
   </data>
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>Ölçek kiplerini içe aktar</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>İçe aktar ScaleModels.json</value>
   </data>
   <data name="About_PageFrame.Title" xml:space="preserve">
     <value>Hakkında</value>

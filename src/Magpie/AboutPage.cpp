@@ -3,9 +3,10 @@
 #if __has_include("AboutPage.g.cpp")
 #include "AboutPage.g.cpp"
 #endif
-#include "Win32Helper.h"
 #include "CommonSharedConstants.h"
 #include "ToastService.h"
+#include "Win32Helper.h"
+#include "XamlHelper.h"
 
 using namespace Magpie;
 
@@ -18,7 +19,7 @@ void AboutPage::VersionTextBlock_DoubleTapped(IInspectable const&, Input::Double
 		
 		const hstring message = ResourceLoader::GetForCurrentView(CommonSharedConstants::APP_RESOURCE_MAP_ID)
 			.GetString(L"About_DeveloperModeEnabled");
-		ToastService::Get().ShowMessageInApp(L"", message);
+		ToastService::Get().ShowMessageInApp({}, message);
 	}
 }
 
@@ -32,6 +33,11 @@ void AboutPage::FeatureRequest_Click(IInspectable const&, RoutedEventArgs const&
 
 void AboutPage::Discussions_Click(IInspectable const&, RoutedEventArgs const&) {
 	Win32Helper::ShellOpen(L"https://github.com/Blinue/Magpie/discussions");
+}
+
+void AboutPage::InfoBar_SizeChanged(IInspectable const& sender, SizeChangedEventArgs const&) const {
+	// 修复 InfoBar 中 Tooltip 的主题
+	XamlHelper::UpdateThemeOfTooltips(sender.try_as<DependencyObject>(), ActualTheme());
 }
 
 }

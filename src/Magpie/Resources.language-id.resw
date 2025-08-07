@@ -222,9 +222,6 @@
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>Impor</value>
   </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>Impor ScaleModels.json</value>
-  </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Opsi lainnya</value>
   </data>
@@ -426,14 +423,8 @@
   <data name="Profile_General_Multimonitor_Closest.Content" xml:space="preserve">
     <value>Monitor yang paling dekat dengan window sumber</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Skalakan window latar depan saat timer berakhir</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>Tunda penskalaan</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>Skalakan setelah {} detik</value>
   </data>
   <data name="Profile_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>Opsi lebih lanjut</value>
@@ -470,9 +461,6 @@
   </data>
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>Susun ulang</value>
-  </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>Gagal parsing</value>
   </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>Tidak ada</value>
@@ -612,14 +600,8 @@
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Header" xml:space="preserve">
     <value>Mensimulasikan layar penuh eksklusif saat melakukan penskalaan</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>Anda harus mengaktifkan "Tampilkan aplikasi pada system tray" untuk menggunakan pengaturan ini</value>
-  </data>
   <data name="Home_Advanced_DeveloperOptions.Description" xml:space="preserve">
     <value>Pengaturan ini hanya untuk penggunaan pengembangan</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Meminimalkan ke baki sistem di startup</value>
   </data>
   <data name="AppSettings_Dialog_Exit" xml:space="preserve">
     <value>Keluar</value>
@@ -756,9 +738,6 @@
   </data>
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>Impor mode penskalaan</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>Impor ScaleModels.json</value>
   </data>
   <data name="About_Version_UpdateSettings.Header" xml:space="preserve">
     <value>Perbarui setelan</value>

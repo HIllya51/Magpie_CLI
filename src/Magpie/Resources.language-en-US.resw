@@ -126,14 +126,8 @@
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>Home</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>Scale the foreground window when timer ends</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>Delayed scaling</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>Scale after {}s</value>
   </data>
   <data name="Home_Activation_Timer_Cancel" xml:space="preserve">
     <value>Cancel</value>
@@ -251,9 +245,6 @@
   </data>
   <data name="ScalingModes_General_Import.Text" xml:space="preserve">
     <value>Import</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>Import ScaleModels.json</value>
   </data>
   <data name="ScalingModes_General_MoreOptions.[using:Windows.UI.Xaml.Controls]ToolTipService.ToolTip" xml:space="preserve">
     <value>More options</value>
@@ -471,9 +462,6 @@
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>Reorder</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>Parsing failed</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>None</value>
   </data>
@@ -607,16 +595,10 @@
     <value>Make effect parameters inline</value>
   </data>
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Description" xml:space="preserve">
-    <value>Notifications and pop-ups from certain applications will be blocked</value>
+    <value>Applies only to fullscreen scaling. Suppresses certain app notifications and pop-ups when enabled</value>
   </data>
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Header" xml:space="preserve">
     <value>Simulate exclusive fullscreen when scaling</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>You need to turn on "Display the app on the system tray" to use this setting</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>Minimize to system tray at startup</value>
   </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>Error</value>
@@ -678,9 +660,6 @@
   </data>
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>Import scaling modes</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>Import ScaleModels.json</value>
   </data>
   <data name="About_Version_UpdateSettings.Header" xml:space="preserve">
     <value>Update settings</value>
@@ -881,7 +860,7 @@
     <value>Windowed scaling shortcut</value>
   </data>
   <data name="Home_Advanced_AllowScalingMaximized.Description" xml:space="preserve">
-    <value>Applies to fullscreen scaling only</value>
+    <value>Applies only to fullscreen scaling</value>
   </data>
   <data name="Home_Toolbar.Description" xml:space="preserve">
     <value>The toolbar appears at the top of the scaled window, providing features like FPS display and screenshot capture. In windowed mode, it also allows dragging the scaled window.</value>
@@ -993,5 +972,50 @@
   </data>
   <data name="Overlay_Toolbar_SwitchToWindowed" xml:space="preserve">
     <value>Switch to Windowed Scaling</value>
+  </data>
+  <data name="Home_Toolbar_InitialState_Fullscreen.Header" xml:space="preserve">
+    <value>Fullscreen scaling</value>
+  </data>
+  <data name="Home_Toolbar_InitialState_Windowed.Header" xml:space="preserve">
+    <value>Windowed scaling</value>
+  </data>
+  <data name="Message_ExportScalingModesFailed" xml:space="preserve">
+    <value>Failed to export scaling modes.</value>
+  </data>
+  <data name="Message_ImportScalingModesFailed" xml:space="preserve">
+    <value>Failed to import scaling modes.</value>
+  </data>
+  <data name="Home_Advanced_DeveloperOptions_LocateLogs.Header" xml:space="preserve">
+    <value>Open logs location</value>
+  </data>
+  <data name="Home_Advanced_KeepOnTop.Description" xml:space="preserve">
+    <value>Applies only to fullscreen scaling. When enabled, the scaled window stays on top while in the foreground to minimize distractions, though it may obscure menus and pop-ups. It also helps reduce latency on GPUs without Multi-Plane Overlay support</value>
+  </data>
+  <data name="Home_Advanced_KeepOnTop.Header" xml:space="preserve">
+    <value>Keep scaled window on top</value>
+  </data>
+  <data name="Message_WindowedDesktopDuplication" xml:space="preserve">
+    <value>Windowed scaling is not supported with Desktop Duplication capture.</value>
+  </data>
+  <data name="Profile_General_DesktopDuplicationWarning.Title" xml:space="preserve">
+    <value>This capture method is incompatible with windowed scaling.</value>
+  </data>
+  <data name="Settings_Launch_RunAtStartup.Description" xml:space="preserve">
+    <value>The main window will not appear if "Display the app on the system tray" is enabled</value>
+  </data>
+  <data name="Home_Activation_Timer_Description" xml:space="preserve">
+    <value>Scale the foreground window after {}s</value>
+  </data>
+  <data name="Home_Activation_Timer_Start" xml:space="preserve">
+    <value>Start</value>
+  </data>
+  <data name="NotifyIcon_Timer_Fullscreen" xml:space="preserve">
+    <value>Scale after {}s (Fullscreen)</value>
+  </data>
+  <data name="NotifyIcon_Timer_Windowed" xml:space="preserve">
+    <value>Scale after {}s (Windowed)</value>
+  </data>
+  <data name="Overlay_Toolbar_Minimize" xml:space="preserve">
+    <value>Minimize</value>
   </data>
 </root>

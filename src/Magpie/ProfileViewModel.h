@@ -1,7 +1,6 @@
 #pragma once
-#include "ProfileViewModel.g.h"
-#include "SmallVector.h"
 #include "Event.h"
+#include "ProfileViewModel.g.h"
 
 namespace Magpie {
 struct Profile;
@@ -28,7 +27,7 @@ struct ProfileViewModel : ProfileViewModelT<ProfileViewModel>,
 
 	fire_and_forget OpenProgramLocation() const noexcept;
 
-	void ChangeExeForLaunching() const noexcept;
+	fire_and_forget ChangeExeForLaunching() noexcept;
 
 	hstring Name() const noexcept;
 
@@ -65,6 +64,8 @@ struct ProfileViewModel : ProfileViewModelT<ProfileViewModel>,
 
 	int CaptureMethod() const noexcept;
 	void CaptureMethod(int value);
+
+	bool IsCaptureMethodDesktopDuplication() const noexcept;
 
 	int AutoScale() const noexcept;
 	void AutoScale(int value);

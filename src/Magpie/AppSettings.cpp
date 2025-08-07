@@ -1,6 +1,6 @@
 #include "pch.h"
-#include "App.h"
 #include "AppSettings.h"
+#include "App.h"
 #include "AutoStartHelper.h"
 #include "CommonSharedConstants.h"
 #include "JsonHelper.h"
@@ -380,13 +380,12 @@ void AppSettings::IsAlwaysRunAsAdmin(bool value) noexcept {
 	}
 
 	_isAlwaysRunAsAdmin = value;
-	std::wstring arguments;
-	if (AutoStartHelper::IsAutoStartEnabled(arguments)) {
-		// 更新启动任务
-		AutoStartHelper::EnableAutoStart(value, _isShowNotifyIcon ? arguments.c_str() : nullptr);
-	}
-
 	SaveAsync();
+
+	// 更新启动任务
+	if (AutoStartHelper::IsAutoStartEnabled()) {
+		AutoStartHelper::EnableAutoStart(value);
+	}
 }
 
 void AppSettings::IsShowNotifyIcon(bool value) noexcept {
@@ -509,9 +508,20 @@ void AppSettings::_UpdateWindowPlacement() noexcept {
 		return;
 	}
 
+	// rcNormalPosition 使用工作区坐标，应转换为屏幕坐标。
+	// 见 https://github.com/Blinue/nt5src/blob/daad8a087a4e75422ec96b7911f1df4669989611/Source/XPSP1/NT/windows/core/ntuser/kernel/winmgr.c#L752
+	HMONITOR hMon = MonitorFromWindow(hwndMain, MONITOR_DEFAULTTOPRIMARY);
+	MONITORINFO mi{ sizeof(mi) };
+	if (!GetMonitorInfo(hMon, &mi)) {
+		Logger::Get().Win32Error("GetMonitorInfo 失败");
+		return;
+	}
+
+	const LONG workingAreaOffsetX = mi.rcWork.left - mi.rcMonitor.left;
+	const LONG workingAreaOffsetY = mi.rcWork.top - mi.rcMonitor.top;
 	_mainWindowCenter = {
-		(wp.rcNormalPosition.left + wp.rcNormalPosition.right) / 2.0f,
-		(wp.rcNormalPosition.top + wp.rcNormalPosition.bottom) / 2.0f
+		(wp.rcNormalPosition.left + wp.rcNormalPosition.right) / 2.0f + workingAreaOffsetX,
+		(wp.rcNormalPosition.top + wp.rcNormalPosition.bottom) / 2.0f + workingAreaOffsetY,
 	};
 
 	const float dpiFactor = GetDpiForWindow(hwndMain) / float(USER_DEFAULT_SCREEN_DPI);
@@ -608,6 +618,8 @@ bool AppSettings::_Save(const _AppSettingsData& data) noexcept {
 	writer.Double(data._minFrameRate);
 	writer.Key("disableFP16");
 	writer.Bool(data._isFP16Disabled);
+	writer.Key("keepOnTop");
+	writer.Bool(data._isKeepOnTop);
 
 	ScalingModesService::Get().Export(writer);
 
@@ -621,8 +633,10 @@ bool AppSettings::_Save(const _AppSettingsData& data) noexcept {
 
 	writer.Key("overlay");
 	writer.StartObject();
-	writer.Key("initialToolbarState");
-	writer.Uint((uint32_t)_initialToolbarState);
+	writer.Key("fullscreenInitialToolbarState");
+	writer.Uint((uint32_t)_fullscreenInitialToolbarState);
+	writer.Key("windowedInitialToolbarState");
+	writer.Uint((uint32_t)_windowedInitialToolbarState);
 	writer.Key("screenshotsDir");
 	writer.String(StrHelper::UTF16ToUTF8(_screenshotsDir.native()).c_str());
 	writer.Key("windows");
@@ -806,6 +820,7 @@ void AppSettings::_LoadSettings(const rapidjson::GenericObject<true, rapidjson::
 	JsonHelper::ReadBool(root, "enableStatisticsForDynamicDetection", _isStatisticsForDynamicDetectionEnabled);
 	JsonHelper::ReadFloat(root, "minFrameRate", _minFrameRate);
 	JsonHelper::ReadBool(root, "disableFP16", _isFP16Disabled);
+	JsonHelper::ReadBool(root, "keepOnTop", _isKeepOnTop);
 
 	[[maybe_unused]] bool result = ScalingModesService::Get().Import(root, true);
 	assert(result);
@@ -847,11 +862,27 @@ void AppSettings::_LoadSettings(const rapidjson::GenericObject<true, rapidjson::
 		auto overlayObj = overlayNode->value.GetObj();
 
 		uint32_t initialToolbarState = (uint32_t)ToolbarState::AutoHide;
-		JsonHelper::ReadUInt(overlayObj, "initialToolbarState", initialToolbarState);
-		if (initialToolbarState >= (uint32_t)ToolbarState::COUNT) {
+		if (JsonHelper::ReadUInt(overlayObj, "fullscreenInitialToolbarState", initialToolbarState, true)) {
+			if (initialToolbarState >= (uint32_t)ToolbarState::COUNT) {
+				initialToolbarState = (uint32_t)ToolbarState::AutoHide;
+			}
+			_fullscreenInitialToolbarState = (ToolbarState)initialToolbarState;
+
 			initialToolbarState = (uint32_t)ToolbarState::AutoHide;
+			JsonHelper::ReadUInt(overlayObj, "windowedInitialToolbarState", initialToolbarState);
+			if (initialToolbarState >= (uint32_t)ToolbarState::COUNT) {
+				initialToolbarState = (uint32_t)ToolbarState::AutoHide;
+			}
+			_windowedInitialToolbarState = (ToolbarState)initialToolbarState;
+		} else {
+			// v0.12.0-preview1 中工具栏初始状态不区分全屏和窗口模式缩放
+			JsonHelper::ReadUInt(overlayObj, "initialToolbarState", initialToolbarState);
+			if (initialToolbarState >= (uint32_t)ToolbarState::COUNT) {
+				initialToolbarState = (uint32_t)ToolbarState::AutoHide;
+			}
+			_fullscreenInitialToolbarState = (ToolbarState)initialToolbarState;
+			_windowedInitialToolbarState = (ToolbarState)initialToolbarState;
 		}
-		_initialToolbarState = (ToolbarState)initialToolbarState;
 
 		{
 			std::wstring value;

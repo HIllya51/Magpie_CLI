@@ -19,26 +19,26 @@
 #if __has_include("App.g.cpp")
 #include "App.g.cpp"
 #endif
-#include "Win32Helper.h"
-#include "Logger.h"
-#include "ShortcutService.h"
+#include "AdaptersService.h"
 #include "CommonSharedConstants.h"
-#include "ScalingService.h"
-#include <CoreWindow.h>
+#include "ControlSizeTrigger.h"
 #include "EffectsService.h"
-#include "UpdateService.h"
+#include "IsEqualStateTrigger.h"
+#include "IsNullStateTrigger.h"
 #include "LocalizationService.h"
-#include "ToastService.h"
+#include "Logger.h"
+#include "MainWindow.h"
 #include "NotifyIconService.h"
+#include "ScalingService.h"
 #include "SettingsCard.h"
 #include "SettingsExpander.h"
 #include "SettingsGroup.h"
-#include "ControlSizeTrigger.h"
-#include "IsEqualStateTrigger.h"
-#include "IsNullStateTrigger.h"
+#include "ShortcutService.h"
 #include "TextBlockHelper.h"
-#include "MainWindow.h"
-#include "AdaptersService.h"
+#include "ToastService.h"
+#include "UpdateService.h"
+#include "Win32Helper.h"
+#include <CoreWindow.h>
 
 using namespace ::Magpie;
 using namespace winrt;
@@ -131,7 +131,7 @@ bool App::Initialize(const wchar_t* arguments) {
 		// Win10 中隐藏 DesktopWindowXamlSource 窗口
 		if (Win32Helper::GetOSVersion().IsWin10()) {
 			HWND hwndDWXS;
-			coreWindow.as<ICoreWindowInterop>()->get_WindowHandle(&hwndDWXS);
+			coreWindow.try_as<ICoreWindowInterop>()->get_WindowHandle(&hwndDWXS);
 			ShowWindow(hwndDWXS, SW_HIDE);
 		}
 

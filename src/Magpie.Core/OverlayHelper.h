@@ -1,6 +1,6 @@
 #pragma once
-#include <imgui.h>
 #include "SmallVector.h"
+#include <imgui.h>
 
 namespace Magpie {
 
@@ -49,10 +49,13 @@ struct OverlayHelper {
 	// 
 	/////////////////////////////////////////////////////
 
+	// 更改图标后记得更新 FONTS_CACHE_VERSION
 	struct SegoeIcons {
 		static const ImWchar Cancel = 0xE711;
 		static const ImWchar Camera = 0xE722;
 		static const ImWchar Favicon = 0xE737;
+		static const ImWchar Remove = 0xE738;
+		static const ImWchar CheckboxIndeterminate = 0xE73C;
 		static const ImWchar FullScreen = 0xE740;
 		static const ImWchar Pinned = 0xE840;
 		static const ImWchar Diagnostic = 0xE9D9;
@@ -65,6 +68,8 @@ struct OverlayHelper {
 		SegoeIcons::Cancel, SegoeIcons::Cancel,
 		SegoeIcons::Camera, SegoeIcons::Camera,
 		SegoeIcons::Favicon, SegoeIcons::Favicon,
+		SegoeIcons::Remove, SegoeIcons::Remove,
+		SegoeIcons::CheckboxIndeterminate, SegoeIcons::CheckboxIndeterminate,
 		SegoeIcons::FullScreen, SegoeIcons::FullScreen,
 		SegoeIcons::Pinned, SegoeIcons::Pinned,
 		SegoeIcons::Diagnostic, SegoeIcons::Diagnostic,

@@ -7,17 +7,25 @@ namespace winrt::Magpie::implementation {
 struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_changed_base<HomeViewModel> {
 	HomeViewModel();
 
+	hstring TimerDescription() const noexcept;
+
 	bool IsTimerOn() const noexcept;
 
 	double TimerProgressRingValue() const noexcept;
 
 	hstring TimerLabelText() const noexcept;
 
-	hstring TimerButtonText() const noexcept;
+	hstring TimerFullscreenButtonText() const noexcept;
+
+	hstring TimerWindowedButtonText() const noexcept;
 
 	bool IsNotRunning() const noexcept;
 
-	void ToggleTimer() const noexcept;
+	hstring TimerButtonText(bool windowedMode) const noexcept;
+
+	void ToggleTimerFullscreen() const noexcept;
+
+	void ToggleTimerWindowed() const noexcept;
 
 	uint32_t Delay() const noexcept;
 	void Delay(uint32_t value);
@@ -39,14 +47,19 @@ struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_chang
 
 	void RemindMeLater();
 
-	int InitialToolbarState() const noexcept;
-	void InitialToolbarState(int value);
+	hstring InitialToolbarStateDescription() const noexcept;
+
+	int FullscreenInitialToolbarState() const noexcept;
+	void FullscreenInitialToolbarState(int value);
+
+	int WindowedInitialToolbarState() const noexcept;
+	void WindowedInitialToolbarState(int value);
 
 	hstring ScreenshotSaveDirectory() const noexcept;
 
 	void OpenScreenshotSaveDirectory() const noexcept;
 
-	void ChangeScreenshotSaveDirectory() noexcept;
+	fire_and_forget ChangeScreenshotSaveDirectory() noexcept;
 
 	bool IsTouchSupportEnabled() const noexcept;
 	fire_and_forget IsTouchSupportEnabled(bool value);
@@ -58,11 +71,14 @@ struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_chang
 	bool IsAllowScalingMaximized() const noexcept;
 	void IsAllowScalingMaximized(bool value);
 
-	bool IsInlineParams() const noexcept;
-	void IsInlineParams(bool value);
+	bool IsKeepOnTop() const noexcept;
+	void IsKeepOnTop(bool value);
 
 	bool IsSimulateExclusiveFullscreen() const noexcept;
 	void IsSimulateExclusiveFullscreen(bool value);
+
+	bool IsInlineParams() const noexcept;
+	void IsInlineParams(bool value);
 
 	static IVector<IInspectable> MinFrameRateOptions();
 
@@ -71,6 +87,10 @@ struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_chang
 
 	bool IsDeveloperMode() const noexcept;
 	void IsDeveloperMode(bool value);
+
+	void LocateMagpieLogs() noexcept;
+	void LocateTouchHelperLogs() noexcept;
+	void LocateUpdaterLogs() noexcept;
 
 	bool IsBenchmarkMode() const noexcept;
 	void IsBenchmarkMode(bool value);
@@ -102,13 +122,15 @@ struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_chang
 	void IsStatisticsForDynamicDetectionEnabled(bool value);
 
 private:
-	void _ScalingService_IsTimerOnChanged(bool value);
+	void _ScalingService_IsTimerOnChanged(bool value, bool windowedMode);
 
 	void _ScalingService_TimerTick(double);
 
 	void _ScalingService_IsScalingChanged(bool);
 
-	::Magpie::Event<bool>::EventRevoker _isTimerOnRevoker;
+	void _ToggleTimer(bool windowedMode) const noexcept;
+
+	::Magpie::Event<bool, bool>::EventRevoker _isTimerOnRevoker;
 	::Magpie::Event<double>::EventRevoker _timerTickRevoker;
 	::Magpie::Event<bool>::EventRevoker _isScalingChangedRevoker;
 	::Magpie::Event<bool>::EventRevoker _isShowOnHomePageChangedRevoker;

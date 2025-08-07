@@ -183,14 +183,8 @@
   <data name="Home_PageFrame.Title" xml:space="preserve">
     <value>홈</value>
   </data>
-  <data name="Home_Activation_Timer.Description" xml:space="preserve">
-    <value>타이머가 끝날 때 포그라운드 창을 스케일</value>
-  </data>
   <data name="Home_Activation_Timer.Header" xml:space="preserve">
     <value>타이머</value>
-  </data>
-  <data name="Home_Activation_Timer_ButtonText" xml:space="preserve">
-    <value>{}초 후 스케일</value>
   </data>
   <data name="Home_Activation_Timer_Cancel" xml:space="preserve">
     <value>취소</value>
@@ -339,9 +333,6 @@
   <data name="Profile_MoreOptions_ReorderFlyout_Title.Text" xml:space="preserve">
     <value>순서 바꾸기</value>
   </data>
-  <data name="ScalingModes_ParsingFailed.Title" xml:space="preserve">
-    <value>구문분석 실패</value>
-  </data>
   <data name="Profile_General_ScalingMode_None" xml:space="preserve">
     <value>없음</value>
   </data>
@@ -419,9 +410,6 @@
   </data>
   <data name="Home_Advanced_SimulateExclusiveFullscreen.Header" xml:space="preserve">
     <value>스케일링 할 때 단독 전체 화면 시뮬레이션</value>
-  </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Description" xml:space="preserve">
-    <value>이 설정을 사용하려면 "시스템 트레이에 앱 표시"를 켜야 합니다</value>
   </data>
   <data name="Profile_Cursor_DrawCursor_ScaleFactor_SameAsSourceWindow.Content" xml:space="preserve">
     <value>소스 창과 동일</value>
@@ -524,9 +512,6 @@
   </data>
   <data name="Profile_Advanced.Header" xml:space="preserve">
     <value>고급</value>
-  </data>
-  <data name="ScalingModes_General_ImportLegacy.Text" xml:space="preserve">
-    <value>ScaleModels.json 가져오기</value>
   </data>
   <data name="About_OtherLinks_Repository.Text" xml:space="preserve">
     <value>깃허브 저장소</value>
@@ -658,9 +643,6 @@
   <data name="Home_Advanced_DeveloperOptions.Description" xml:space="preserve">
     <value>이 설정은 개발 전용입니다</value>
   </data>
-  <data name="Settings_Launch_RunAtStartup_MinimizeAtStartup.Header" xml:space="preserve">
-    <value>부팅 시 시스템 트레이로 최소화</value>
-  </data>
   <data name="AppSettings_Dialog_Error" xml:space="preserve">
     <value>오류</value>
   </data>
@@ -702,9 +684,6 @@
   </data>
   <data name="Dialog_Import_Title" xml:space="preserve">
     <value>스케일링 모드 가져오기</value>
-  </data>
-  <data name="Dialog_ImportLegacy_Title" xml:space="preserve">
-    <value>ScaleModels.json 가져오기</value>
   </data>
   <data name="About_Version_UpdateSettings.Header" xml:space="preserve">
     <value>업데이트 설정</value>

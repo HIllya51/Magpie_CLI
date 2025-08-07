@@ -1,8 +1,8 @@
 #include "pch.h"
 #include "AdaptivePresenter.h"
+#include "DeviceResources.h"
 #include "Logger.h"
 #include "ScalingWindow.h"
-#include "DeviceResources.h"
 #include "Win32Helper.h"
 
 namespace Magpie {
@@ -47,7 +47,7 @@ bool AdaptivePresenter::_Initialize(HWND hwndAttach) noexcept {
 	};
 
 	ID3D11Device5* d3dDevice = _deviceResources->GetD3DDevice();
-	winrt::com_ptr<IDXGISwapChain1> dxgiSwapChain = nullptr;
+	winrt::com_ptr<IDXGISwapChain1> dxgiSwapChain;
 	HRESULT hr = _deviceResources->GetDXGIFactory()->CreateSwapChainForHwnd(
 		d3dDevice,
 		hwndAttach,

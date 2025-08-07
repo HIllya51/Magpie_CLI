@@ -1,13 +1,13 @@
 #pragma once
-#include "WindowBase.h"
 #include "ScalingOptions.h"
 #include "SrcTracker.h"
+#include "WindowBase.h"
 
 namespace Magpie {
 
 class CursorManager;
 
-class ScalingWindow : public WindowBaseT<ScalingWindow> {
+class ScalingWindow final : public WindowBaseT<ScalingWindow> {
 	using base_type = WindowBaseT<ScalingWindow>;
 	friend base_type;
 
@@ -34,7 +34,7 @@ public:
 
 	void Stop() noexcept;
 
-	void SwitchScalingState(bool isWindowedMode) noexcept;
+	void ToggleScaling(bool isWindowedMode) noexcept;
 
 	void SwitchToolbarState() noexcept;
 
@@ -106,7 +106,11 @@ private:
 
 	void _Show() noexcept;
 
-	bool _UpdateSrcState() noexcept;
+	bool _UpdateSrcState(
+		bool& isSrcRepositioning,
+		bool& srcFocusedChanged,
+		bool& srcOwnedWindowFocusedChanged
+	) noexcept;
 
 	bool _CheckForegroundFor3DGameMode(HWND hwndFore) const noexcept;
 
@@ -136,7 +140,10 @@ private:
 
 	void _UpdateFrameMargins() const noexcept;
 
-	winrt::fire_and_forget _UpdateFocusStateAsync(bool onShow = false) const noexcept;
+	winrt::fire_and_forget _UpdateFocusStateAsync(
+		bool onSrcOwnedWindowFocusedChanged,
+		bool onShow
+	) const noexcept;
 
 	bool _IsBorderless() const noexcept;
 
@@ -174,6 +181,9 @@ private:
 	std::array<wil::unique_hwnd, 4> _hwndTouchHoles{};
 
 	ScalingError _runtimeError = ScalingError::NoError;
+
+	// 窗口缩放时切换到全屏缩放或最小化前保存尺寸供以后恢复
+	LONG _lastWindowedRendererWidth = 0;
 
 	// 第一帧渲染完成后再显示
 	bool _isFirstFrame = false;

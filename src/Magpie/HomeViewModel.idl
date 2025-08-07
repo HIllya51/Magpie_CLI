@@ -7,16 +7,20 @@ namespace Magpie {
 		void ReleaseNotes();
 		void RemindMeLater();
 		
+		String TimerDescription { get; };
 		Boolean IsTimerOn { get; };
 		Double TimerProgressRingValue { get; };
 		String TimerLabelText { get; };
-		String TimerButtonText { get; };
 		Boolean IsNotRunning { get; };
 		UInt32 Delay;
 
-		void ToggleTimer();
+		String TimerButtonText(Boolean windowedMode);
+		void ToggleTimerFullscreen();
+		void ToggleTimerWindowed();
 
-		Int32 InitialToolbarState;
+		String InitialToolbarStateDescription { get; };
+		Int32 FullscreenInitialToolbarState;
+		Int32 WindowedInitialToolbarState;
 		String ScreenshotSaveDirectory { get; };
 		void OpenScreenshotSaveDirectory();
 		void ChangeScreenshotSaveDirectory();
@@ -26,12 +30,16 @@ namespace Magpie {
 		Boolean IsShowTouchSupportInfoBar { get; };
 
 		Boolean IsAllowScalingMaximized;
-		Boolean IsInlineParams;
+		Boolean IsKeepOnTop;
 		Boolean IsSimulateExclusiveFullscreen;
+		Boolean IsInlineParams;
 		static IVector<IInspectable> MinFrameRateOptions { get; };
 		Int32 MinFrameRateIndex;
 
 		Boolean IsDeveloperMode;
+		void LocateMagpieLogs();
+		void LocateTouchHelperLogs();
+		void LocateUpdaterLogs();
 		Boolean IsDebugMode;
 		Boolean IsBenchmarkMode;
 		Boolean IsEffectCacheDisabled;
