@@ -491,7 +491,7 @@ int WINAPI wWinMain(
 			options.value().Is3DGameMode(false);
 		}
 		SetForegroundWindow(targethwnd);
-		magrt.Start(targethwnd, std::move(options.value()));  
+		magrt.Start(targethwnd, std::move(options.value()), true);  
 	};
     _msgwindow.registmessage(Magpie_Core_CLI_Message_Start, magstart);
     _msgwindow.registmessage(Magpie_Core_CLI_Message_Start_WindowedMode, [&](WPARAM wp, LPARAM lp) {magstart(wp, lp, true); });
