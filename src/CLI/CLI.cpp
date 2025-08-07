@@ -187,7 +187,8 @@ void LoadOverlayOptions(ScalingOptions& options, const nlohmann::json& config) {
         // 回落到使用当前目录
         options.screenshotsDir = L".";
     }
-    options.initialToolbarState = config["initialToolbarState"];
+    options.fullscreenInitialToolbarState = config["fullscreenInitialToolbarState"];
+    options.windowedInitialToolbarState = config["windowedInitialToolbarState"];
     for (auto&& [key, value] : config["windows"].items()) {
 
         options.overlayOptions.windows.emplace(
@@ -215,7 +216,8 @@ std::string SeriesOverlayOptions(const ScalingOptions& options) {
 
     nlohmann::json overlay;
     overlay["windows"] = config;
-    overlay["initialToolbarState"] = options.initialToolbarState;
+    overlay["fullscreenInitialToolbarState"] = options.fullscreenInitialToolbarState;
+    overlay["windowedInitialToolbarState"] = options.windowedInitialToolbarState;
     overlay["screenshotsDir"] = options.screenshotsDir;
     nlohmann::json _overlay;
     _overlay["overlay"] = overlay;
@@ -257,7 +259,8 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
     } else {
         options.minFrameRate = config["minFrameRate"];
     }
-    options.initialToolbarState = config["overlay"]["initialToolbarState"];
+    options.fullscreenInitialToolbarState = config["overlay"]["fullscreenInitialToolbarState"];
+    options.windowedInitialToolbarState = config["overlay"]["windowedInitialToolbarState"];
     options.multiMonitorUsage = profile["multiMonitorUsage"];
     options.cursorInterpolationMode = profile["cursorInterpolationMode"];
 
