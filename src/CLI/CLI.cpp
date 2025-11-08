@@ -262,6 +262,7 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
     options.fullscreenInitialToolbarState = config["overlay"]["fullscreenInitialToolbarState"];
     options.windowedInitialToolbarState = config["overlay"]["windowedInitialToolbarState"];
     options.multiMonitorUsage = profile["multiMonitorUsage"];
+	options.destAlignment = profile["destAlignment"];
     options.cursorInterpolationMode = profile["cursorInterpolationMode"];
 
     // options.IsTouchSupportEnabled(isTouchSupportEnabled);
@@ -273,9 +274,16 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
 
     solvecursorscale(options, profile["cursorScaling"], profile["customCursorScaling"]);
 	solve_initialWindowedScaleFactor(options, profile["initialWindowedScaleFactor"], profile["customInitialWindowedScaleFactor"]);
+
+
+	if (profile["autoHideCursorEnabled"]) {
+		options.autoHideCursorDelay = profile["autoHideCursorDelay"];
+	}
+
     // 应用全局配置
     options.IsDeveloperMode(config["developerMode"]);
     options.IsBenchmarkMode(config["benchmarkMode"]);
+	options.IsTopmostDisabled(config["disableTopmost"]);
     options.IsFP16Disabled(config["disableFP16"]);
     options.IsInlineParams(config["inlineParams"]);
     options.IsDebugMode(config["debugMode"]);
