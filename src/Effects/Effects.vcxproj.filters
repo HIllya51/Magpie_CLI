@@ -451,6 +451,7 @@
     <CopyFileToFolders Include="CuNNy2\CuNNy-veryfast-NVL.hlsl">
       <Filter>CuNNy2</Filter>
     </CopyFileToFolders>
+    <CopyFileToFolders Include="SGSR.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <Filter Include="Anime4K">

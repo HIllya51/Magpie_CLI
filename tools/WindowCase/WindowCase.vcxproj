@@ -76,6 +76,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="HideCursorWindow.cpp" />
     <ClCompile Include="HungWindow.cpp" />
     <ClCompile Include="PopupHostWindow.cpp" />
     <ClCompile Include="TopmostWindow.cpp" />
@@ -84,13 +85,16 @@
     <ClCompile Include="pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="Utils.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="HideCursorWindow.h" />
     <ClInclude Include="HungWindow.h" />
     <ClInclude Include="PopupHostWindow.h" />
     <ClInclude Include="TopmostWindow.h" />
     <ClInclude Include="KirikiriWindow.h" />
     <ClInclude Include="pch.h" />
+    <ClInclude Include="Utils.h" />
     <ClInclude Include="WindowBase.h" />
   </ItemGroup>
   <ItemGroup>

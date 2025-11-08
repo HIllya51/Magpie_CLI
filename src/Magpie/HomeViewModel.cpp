@@ -95,10 +95,15 @@ uint32_t HomeViewModel::Delay() const noexcept {
 void HomeViewModel::Delay(uint32_t value) {
 	AppSettings::Get().CountdownSeconds(value);
 	RaisePropertyChanged(L"Delay");
+	RaisePropertyChanged(L"DelayText");
 	RaisePropertyChanged(L"TimerDescription");
 }
 
-inline void HomeViewModel::ShowUpdateCard(bool value) noexcept {
+hstring HomeViewModel::DelayText() const noexcept {
+	return App::Get().DoubleFormatter().FormatDouble(Delay());
+}
+
+void HomeViewModel::ShowUpdateCard(bool value) noexcept {
 	_showUpdateCard = value;
 	if (!value) {
 		UpdateService::Get().IsShowOnHomePage(false);
@@ -449,6 +454,21 @@ void HomeViewModel::LocateUpdaterLogs() noexcept {
 	LocateTempLogs(CommonSharedConstants::UPDATER_LOG_NAME);
 }
 
+bool HomeViewModel::IsDebugMode() const noexcept {
+	return AppSettings::Get().IsDebugMode();
+}
+
+void HomeViewModel::IsDebugMode(bool value) {
+	AppSettings& settings = AppSettings::Get();
+
+	if (settings.IsDebugMode() == value) {
+		return;
+	}
+
+	settings.IsDebugMode(value);
+	RaisePropertyChanged(L"IsDebugMode");
+}
+
 bool HomeViewModel::IsBenchmarkMode() const noexcept {
 	return AppSettings::Get().IsBenchmarkMode();
 }
@@ -464,19 +484,19 @@ void HomeViewModel::IsBenchmarkMode(bool value) {
 	RaisePropertyChanged(L"IsBenchmarkMode");
 }
 
-bool HomeViewModel::IsDebugMode() const noexcept {
-	return AppSettings::Get().IsDebugMode();
+bool HomeViewModel::IsTopmostDisabled() const noexcept {
+	return AppSettings::Get().IsTopmostDisabled();
 }
 
-void HomeViewModel::IsDebugMode(bool value) {
+void HomeViewModel::IsTopmostDisabled(bool value) {
 	AppSettings& settings = AppSettings::Get();
 
-	if (settings.IsDebugMode() == value) {
+	if (settings.IsTopmostDisabled() == value) {
 		return;
 	}
 
-	settings.IsDebugMode(value);
-	RaisePropertyChanged(L"IsDebugMode");
+	settings.IsTopmostDisabled(value);
+	RaisePropertyChanged(L"IsTopmostDisabled");
 }
 
 bool HomeViewModel::IsEffectCacheDisabled() const noexcept {

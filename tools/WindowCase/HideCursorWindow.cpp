@@ -1,9 +1,9 @@
 #include "pch.h"
-#include "TopmostWindow.h"
+#include "HideCursorWindow.h"
 #include "Utils.h"
 
-bool TopmostWindow::Create() noexcept {
-	static const wchar_t* WINDOW_NAME = L"TopmostWindow";
+bool HideCursorWindow::Create() noexcept {
+	static const wchar_t* WINDOW_NAME = L"HideCursorWindow";
 
 	WNDCLASSEXW wcex{
 		.cbSize = sizeof(WNDCLASSEX),
@@ -42,13 +42,13 @@ bool TopmostWindow::Create() noexcept {
 	return true;
 }
 
-LRESULT TopmostWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) noexcept {
+LRESULT HideCursorWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) noexcept {
 	switch (msg) {
 	case WM_CREATE:
 	{
 		const LRESULT ret = base_type::_MessageHandler(msg, wParam, lParam);
 
-		_hwndBtn = CreateWindow(L"BUTTON", L"未置顶", WS_CHILD | WS_VISIBLE,
+		_hwndBtn = CreateWindow(L"BUTTON", L"未隐藏光标", WS_CHILD | WS_VISIBLE,
 			0, 0, 0, 0, Handle(), (HMENU)1, Utils::GetModuleInstanceHandle(), 0);
 		_UpdateButtonPos();
 
@@ -64,18 +64,9 @@ LRESULT TopmostWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	case WM_COMMAND:
 	{
 		if (HIWORD(wParam) == BN_CLICKED && LOWORD(wParam) == 1) {
-			if (GetWindowExStyle(Handle()) & WS_EX_TOPMOST){
-				SetWindowPos(Handle(), HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-			} else {
-				SetWindowPos(Handle(), HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE);
-			}
-
-			if (GetWindowExStyle(Handle()) & WS_EX_TOPMOST) {
-				SetWindowText(_hwndBtn, L"已置顶");
-			} else {
-				SetWindowText(_hwndBtn, L"未置顶");
-			}
-
+			ShowCursor(_isCursorHidden);
+			SetWindowText(_hwndBtn, _isCursorHidden ? L"未隐藏光标" : L"已隐藏光标");
+			_isCursorHidden = !_isCursorHidden;
 			return 0;
 		}
 		break;
@@ -88,12 +79,12 @@ LRESULT TopmostWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	return base_type::_MessageHandler(msg, wParam, lParam);
 }
 
-void TopmostWindow::_UpdateButtonPos() noexcept {
+void HideCursorWindow::_UpdateButtonPos() noexcept {
 	RECT clientRect;
 	GetClientRect(Handle(), &clientRect);
 
 	const double dpiScale = _DpiScale();
-	SIZE btnSize = { std::lround(100 * dpiScale),std::lround(50 * dpiScale) };
+	const SIZE btnSize = { std::lround(120 * dpiScale),std::lround(50 * dpiScale) };
 	SetWindowPos(
 		_hwndBtn,
 		NULL,

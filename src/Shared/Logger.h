@@ -1,5 +1,12 @@
 #pragma once
+#if defined(_DEBUG) && defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wsign-compare"
+#endif
 #include <spdlog/spdlog.h>
+#if defined(_DEBUG) && defined(__clang__)
+#pragma clang diagnostic pop
+#endif
 #include <fmt/printf.h>
 
 // std::source_location 中的函数名包含整个签名过于冗长，我们只需记录函数名，

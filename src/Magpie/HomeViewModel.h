@@ -15,10 +15,6 @@ struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_chang
 
 	hstring TimerLabelText() const noexcept;
 
-	hstring TimerFullscreenButtonText() const noexcept;
-
-	hstring TimerWindowedButtonText() const noexcept;
-
 	bool IsNotRunning() const noexcept;
 
 	hstring TimerButtonText(bool windowedMode) const noexcept;
@@ -29,6 +25,8 @@ struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_chang
 
 	uint32_t Delay() const noexcept;
 	void Delay(uint32_t value);
+
+	hstring DelayText() const noexcept;
 
 	bool ShowUpdateCard() const noexcept {
 		return _showUpdateCard;
@@ -89,11 +87,14 @@ struct HomeViewModel : HomeViewModelT<HomeViewModel>, wil::notify_property_chang
 	void LocateTouchHelperLogs() noexcept;
 	void LocateUpdaterLogs() noexcept;
 
+	bool IsDebugMode() const noexcept;
+	void IsDebugMode(bool value);
+
 	bool IsBenchmarkMode() const noexcept;
 	void IsBenchmarkMode(bool value);
 
-	bool IsDebugMode() const noexcept;
-	void IsDebugMode(bool value);
+	bool IsTopmostDisabled() const noexcept;
+	void IsTopmostDisabled(bool value);
 
 	bool IsEffectCacheDisabled() const noexcept;
 	void IsEffectCacheDisabled(bool value);

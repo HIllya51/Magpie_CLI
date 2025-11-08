@@ -332,6 +332,17 @@ ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 void ScalingWindow::Start(HWND hwndSrc, ScalingOptions&& options) noexcept {
 	assert(!Handle());
 
+	assert(!options.effects.empty());
+	assert(options.cropping.Left >= 0 && options.cropping.Top >= 0 &&
+		options.cropping.Right >= 0 && options.cropping.Bottom >= 0);
+	assert(options.minFrameRate >= 0);
+	assert(!options.maxFrameRate.has_value() || *options.maxFrameRate > 0);
+	assert(options.cursorScaling >= 0);
+	assert(!options.autoHideCursorDelay.has_value() || *options.autoHideCursorDelay > 0);
+	assert(options.initialWindowedScaleFactor >= 0);
+	assert(!options.screenshotsDir.empty());
+	assert(options.showToast && options.showError && options.save);
+
 	options.Log();
 	// 缩放结束后失效
 	_options = std::move(options);
@@ -478,6 +489,17 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	{
 		// 调整窗口大小时会进入 OS 的内部循环，我们的消息循环没有机会调用 Render。幸运的是
 		// 内部循环会正常分发消息，因此有必要在窗口过程中执行渲染以避免调整大小时渲染暂停。
+		
+		// 删除消息队列中的其他 WM_FRONTEND_RENDER 以避免重复渲染
+		{
+			MSG msg1;
+			while (PeekMessage(&msg1, Handle(), CommonSharedConstants::WM_FRONTEND_RENDER,
+				CommonSharedConstants::WM_FRONTEND_RENDER, PM_REMOVE)
+			) {
+				// 不做处理
+			}
+		}
+
 		Render();
 		return 0;
 	}
@@ -706,19 +728,13 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 
 		// 阻止 OS 修改置顶状态。当源窗口中途置顶/取消置顶时，OS 会试图修改缩放窗口的置顶
 		// 状态，这不是我们想要的。
-		if (!(windowPos.flags & SWP_NOZORDER)) {
-			if (_srcTracker.IsFocused() || IsTopmostWindow(_srcTracker.Handle())) {
+		if (!(windowPos.flags & SWP_NOZORDER) && !_options.IsDebugMode()) {
+			if (_CalcTopmostState()) {
 				if (windowPos.hwndInsertAfter != HWND_TOP) {
 					windowPos.hwndInsertAfter = HWND_TOPMOST;
 				}
 			} else if (windowPos.hwndInsertAfter == HWND_TOPMOST) {
 				windowPos.hwndInsertAfter = HWND_NOTOPMOST;
-			}
-
-			// 缩放窗口置顶或取消置顶时避免影响源窗口的 Z 顺序。理论上不需要这个标志，但消息
-			// 弹窗证明最好加上，见 ToastPage::ShowMessageOnWindow。
-			if (windowPos.hwndInsertAfter == HWND_TOPMOST || windowPos.hwndInsertAfter == HWND_NOTOPMOST) {
-				windowPos.flags |= SWP_NOOWNERZORDER;
 			}
 		}
 
@@ -1871,83 +1887,52 @@ void ScalingWindow::_UpdateFocusState() const noexcept {
 		DefWindowProc(Handle(), WM_NCACTIVATE, _srcTracker.IsFocused(), 0);
 	}
 
-	if (Win32Helper::IsWindowHung(_srcTracker.Handle())) {
-		Logger::Get().Error("源窗口已挂起");
-		_DelayedStop();
-		return;
-	}
-
 	if (!_options.IsDebugMode()) {
-		// 源窗口位于前台时应将缩放窗口置顶，这是为了防止有些窗口突破 OS 维护的所有者关系顺
-		// 序，如 GH#1232；如果源窗口不在前台则取消置顶（除非源窗口是置顶的），并确保缩放窗
-		// 口刚好在源窗口前以防遮挡其他窗口。
-		//
-		// 这里确实搞得很复杂，是我反复实验得到的，可以确保可靠性。切换前台窗口并非原子操作，
-		// 成为前台窗口和被放到 Z 轴顶部有一点间隔，这就导致了同步问题。
-		if (_srcTracker.IsFocused()) {
-			// 将缩放窗口置顶，由于同步问题可能需要尝试多次
-			for (int i = 0; i < 10; ++i) {
-				SetWindowPos(Handle(), HWND_TOPMOST, 0, 0, 0, 0,
-					SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+		if (Win32Helper::IsWindowHung(_srcTracker.Handle())) {
+			Logger::Get().Error("源窗口已挂起");
+			_DelayedStop();
+			return;
+		}
 
-				if (IsTopmostWindow(Handle())) {
+		const bool topmost = _CalcTopmostState();
+		if (IsTopmostWindow(Handle()) != topmost) {
+			// 由于同步问题可能需要尝试多次
+			for (int i = 0; i < 10; ++i) {
+				SetWindowPos(Handle(), topmost ? HWND_TOPMOST : HWND_NOTOPMOST,
+					0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
+
+				if (IsTopmostWindow(Handle()) == topmost) {
 					break;
 				}
 			}
+		}
 
-			HDWP hDwp = BeginDeferWindowPos(2);
-			if (hDwp) {
-				// 确保源窗口在最前。这一步是有必要的，OS 有几率失败
-				hDwp = DeferWindowPos(hDwp, _srcTracker.Handle(), HWND_TOP, 0, 0, 0, 0,
-					SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
-				// 确保缩放窗口在所有置顶窗口之上，这使不支持 MPO 的显卡更容易激活 DirectFlip
-				hDwp = DeferWindowPos(hDwp, Handle(), HWND_TOP, 0, 0, 0, 0,
-					SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
-				EndDeferWindowPos(hDwp);
-			}
-		} else {
-			// 将缩放窗口置于源窗口之前，由于同步问题可能需要尝试多次
-			const bool isSrcTopmost = IsTopmostWindow(_srcTracker.Handle());
-			for (int i = 0; i < 10; ++i) {
+		if (_srcTracker.IsFocused()) {
+			if (!_options.IsWindowedMode()) {
+				// 全屏模式缩放时确保缩放窗口在所有置顶窗口之上，这使不支持 MPO 的显卡更容易激
+				// 活 DirectFlip。
 				HDWP hDwp = BeginDeferWindowPos(2);
 				if (hDwp) {
-					// 先修改缩放窗口的置顶状态，下一个操作才符合预期。如果源窗口是置顶的，缩放窗口
-					// 也应置顶。
-					hDwp = DeferWindowPos(hDwp, Handle(), isSrcTopmost ? HWND_TOPMOST : HWND_NOTOPMOST,
-						0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
-
-					// 这里把缩放窗口放到源窗口**之前**，虽然字面上是之后，因为 OS 会自动维护所有者
-					// 关系顺序。
-					// 
-					// 我们希望把缩放窗口刚好放在源窗口之前以避免遮挡其他窗口，但不存在 API 能把一个
-					// 窗口放到另一个窗口之前。hWndInsertAfter 传入
-					// ```
-					// GetWindow(_srcTracker.Handle(), GW_HWNDPREV)
-					// ```
-					// 不可靠，还需要检查可见性和是否置顶。反过来将源窗口放到缩放窗口之后也不是好办法，
-					// 我们应避免改变源窗口的 Z 顺序。最后我想到了这个很巧妙的方法，即 hWndInsertAfter
-					// 传入源窗口句柄，由于存在所有者/被所有者关系，OS 将自动调整顺序。
-					hDwp = DeferWindowPos(hDwp, Handle(), _srcTracker.Handle(),
-						0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
-
+					hDwp = DeferWindowPos(hDwp, _srcTracker.Handle(), HWND_TOP, 0, 0, 0, 0,
+						SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+					hDwp = DeferWindowPos(hDwp, Handle(), HWND_TOP, 0, 0, 0, 0,
+						SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
 					EndDeferWindowPos(hDwp);
 				}
-
-				// 如果缩放窗口不是刚好位于源窗口之前则重试
-				if (GetWindow(_srcTracker.Handle(), GW_HWNDPREV) == Handle() &&
-					isSrcTopmost == IsTopmostWindow(Handle())) {
-					break;
-				}
 			}
-
-			// 确保前台窗口在最前
+		} else {
 			if (const HWND hwndFore = GetForegroundWindow()) {
-				if (!SetWindowPos(hwndFore, HWND_TOP, 0, 0, 0, 0,
-					SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)) {
-					// 可能由于权限不足而失败，这种情况比较棘手。切换两次前台窗口几乎是完美的解决方案，
-					// 但我想知道有没有更好的。
-					SetForegroundWindow(GetDesktopWindow());
-					SetForegroundWindow(hwndFore);
+				if (!SetWindowPos(hwndFore, HWND_TOP, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE)) {
+					// 如果前台窗口权限更高，SetWindowPos 会失败。这时用其他方法将缩放窗口放到
+					// 前台窗口之后，缺点是偶尔会有一瞬间源窗口出现在缩放窗口前。
+					HDWP hDwp = BeginDeferWindowPos(2);
+					if (hDwp) {
+						hDwp = DeferWindowPos(hDwp, Handle(), _srcTracker.Handle(),
+							0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
+						hDwp = DeferWindowPos(hDwp, _srcTracker.Handle(), Handle(),
+							0, 0, 0, 0, SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
+						EndDeferWindowPos(hDwp);
+					}
 				}
 			}
 		}
@@ -1959,6 +1944,13 @@ void ScalingWindow::_UpdateFocusState() const noexcept {
 		// lParam 传 1 表示转到后台而非结束缩放
 		PostMessage(HWND_BROADCAST, WM_MAGPIE_SCALINGCHANGED, 0, 1);
 	}
+}
+
+bool ScalingWindow::_CalcTopmostState() const noexcept {
+	// 源窗口位于前台时应将缩放窗口置顶，这是为了防止有些窗口突破 OS 维护的所有者关系顺
+	// 序，如 GH#1232；如果源窗口不在前台则取消置顶（除非源窗口是置顶的）。
+	return (_srcTracker.IsFocused() && !_options.IsTopmostDisabled()) ||
+		IsTopmostWindow(_srcTracker.Handle());
 }
 
 bool ScalingWindow::_IsBorderless() const noexcept {
@@ -2101,7 +2093,7 @@ void ScalingWindow::_DelayedStop(bool onSrcHung, bool onSrcRepositioning) const 
 		if (!(IsWindow(hwndSrc) && Win32Helper::IsWindowHung(hwndSrc))) {
 			// 提前取消置顶，这样销毁时出现问题不会影响和桌面环境交互
 			SetWindowPos(Handle(), HWND_NOTOPMOST, 0, 0, 0, 0,
-				SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE);
+				SWP_NOACTIVATE | SWP_NOMOVE | SWP_NOSIZE | SWP_NOOWNERZORDER);
 		}
 	}
 

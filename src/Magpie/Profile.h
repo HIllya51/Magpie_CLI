@@ -41,6 +41,7 @@ struct Profile {
 		customInitialWindowedScaleFactor = other.customInitialWindowedScaleFactor;
 		cursorScaling = other.cursorScaling;
 		customCursorScaling = other.customCursorScaling;
+		autoHideCursorDelay = other.autoHideCursorDelay;
 		cropping = other.cropping;
 		captureMethod = other.captureMethod;
 		graphicsCardId = other.graphicsCardId;
@@ -48,10 +49,12 @@ struct Profile {
 		multiMonitorUsage = other.multiMonitorUsage;
 		cursorInterpolationMode = other.cursorInterpolationMode;
 		launchParameters = other.launchParameters;
+		destAlignment = other.destAlignment;
 		scalingFlags = other.scalingFlags;
 		
 		isCroppingEnabled = other.isCroppingEnabled;
 		isFrameRateLimiterEnabled = other.isFrameRateLimiterEnabled;
+		isAutoHideCursorEnabled = other.isAutoHideCursorEnabled;
 	}
 
 	DEFINE_FLAG_ACCESSOR(Is3DGameMode, ScalingFlags::Is3DGameMode, scalingFlags)
@@ -77,6 +80,9 @@ struct Profile {
 	CursorScaling cursorScaling = CursorScaling::NoScaling;
 	float customCursorScaling = 1.0;
 
+	// 0.1~5
+	float autoHideCursorDelay = 3.0f;
+
 	Cropping cropping{};
 	// -1 表示原样
 	int scalingMode = -1;
@@ -89,12 +95,14 @@ struct Profile {
 	float maxFrameRate = 60.0f;
 
 	std::wstring launchParameters;
+	DestAlignment destAlignment = DestAlignment::Center;
 
 	uint32_t scalingFlags = ScalingFlags::AdjustCursorSpeed;
 
 	bool isPackaged = false;
 	bool isCroppingEnabled = false;
 	bool isFrameRateLimiterEnabled = false;
+	bool isAutoHideCursorEnabled = false;
 };
 
 }

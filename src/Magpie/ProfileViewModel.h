@@ -131,8 +131,19 @@ struct ProfileViewModel : ProfileViewModelT<ProfileViewModel>,
 	int CursorInterpolationMode() const noexcept;
 	void CursorInterpolationMode(int value);
 
+	bool IsAutoHideCursorEnabled() const noexcept;
+	void IsAutoHideCursorEnabled(bool value);
+
+	double AutoHideCursorDelay() const noexcept;
+	void AutoHideCursorDelay(double value);
+
+	hstring AutoHideCursorDelayText() const noexcept;
+
 	hstring LaunchParameters() const noexcept;
 	void LaunchParameters(const hstring& value);
+
+	int DestAlignment() const noexcept;
+	void DestAlignment(int value);
 
 	bool IsDirectFlipDisabled() const noexcept;
 	void IsDirectFlipDisabled(bool value);

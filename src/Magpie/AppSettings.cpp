@@ -121,6 +121,10 @@ static void WriteProfile(rapidjson::PrettyWriter<rapidjson::StringBuffer>& write
 	writer.Double(profile.customCursorScaling);
 	writer.Key("cursorInterpolationMode");
 	writer.Uint((uint32_t)profile.cursorInterpolationMode);
+	writer.Key("autoHideCursorEnabled");
+	writer.Bool(profile.isAutoHideCursorEnabled);
+	writer.Key("autoHideCursorDelay");
+	writer.Double(profile.autoHideCursorDelay);
 
 	writer.Key("croppingEnabled");
 	writer.Bool(profile.isCroppingEnabled);
@@ -135,6 +139,9 @@ static void WriteProfile(rapidjson::PrettyWriter<rapidjson::StringBuffer>& write
 	writer.Key("bottom");
 	writer.Double(profile.cropping.Bottom);
 	writer.EndObject();
+
+	writer.Key("destAlignment");
+	writer.Uint((uint32_t)profile.destAlignment);
 
 	writer.EndObject();
 }
@@ -586,6 +593,8 @@ bool AppSettings::_Save(const _AppSettingsData& data) noexcept {
 	writer.Bool(data._isDebugMode);
 	writer.Key("benchmarkMode");
 	writer.Bool(data._isBenchmarkMode);
+	writer.Key("disableTopmost");
+	writer.Bool(data._isTopmostDisabled);
 	writer.Key("disableEffectCache");
 	writer.Bool(data._isEffectCacheDisabled);
 	writer.Key("disableFontCache");
@@ -783,6 +792,7 @@ void AppSettings::_LoadSettings(const rapidjson::GenericObject<true, rapidjson::
 	JsonHelper::ReadBool(root, "developerMode", _isDeveloperMode);
 	JsonHelper::ReadBool(root, "debugMode", _isDebugMode);
 	JsonHelper::ReadBool(root, "benchmarkMode", _isBenchmarkMode);
+	JsonHelper::ReadBool(root, "disableTopmost", _isTopmostDisabled);
 	JsonHelper::ReadBool(root, "disableEffectCache", _isEffectCacheDisabled);
 	JsonHelper::ReadBool(root, "disableFontCache", _isFontCacheDisabled);
 	JsonHelper::ReadBool(root, "saveEffectSources", _isSaveEffectSources);
@@ -1060,7 +1070,9 @@ bool AppSettings::_LoadProfile(
 
 	JsonHelper::ReadBool(profileObj, "frameRateLimiterEnabled", profile.isFrameRateLimiterEnabled);
 	JsonHelper::ReadFloat(profileObj, "maxFrameRate", profile.maxFrameRate);
-	if (profile.maxFrameRate < 10.0f || profile.maxFrameRate > 1000.0f) {
+	if (profile.maxFrameRate <= 10.0f - FLOAT_EPSILON<float> ||
+		profile.maxFrameRate >= 1000.0f + FLOAT_EPSILON<float>)
+	{
 		profile.maxFrameRate = 60.0f;
 	}
 
@@ -1089,10 +1101,18 @@ bool AppSettings::_LoadProfile(
 	{
 		uint32_t cursorInterpolationMode = (uint32_t)CursorInterpolationMode::NearestNeighbor;
 		JsonHelper::ReadUInt(profileObj, "cursorInterpolationMode", cursorInterpolationMode);
-		if (cursorInterpolationMode > 1) {
+		if (cursorInterpolationMode >= (uint32_t)CursorInterpolationMode::COUNT) {
 			cursorInterpolationMode = (uint32_t)CursorInterpolationMode::NearestNeighbor;
 		}
 		profile.cursorInterpolationMode = (CursorInterpolationMode)cursorInterpolationMode;
+	}
+
+	JsonHelper::ReadBool(profileObj, "autoHideCursorEnabled", profile.isAutoHideCursorEnabled);
+	JsonHelper::ReadFloat(profileObj, "autoHideCursorDelay", profile.autoHideCursorDelay);
+	if (profile.autoHideCursorDelay <= 0.1f - FLOAT_EPSILON<float> ||
+		profile.autoHideCursorDelay >= 5.0f + FLOAT_EPSILON<float>)
+	{
+		profile.autoHideCursorDelay = 3.0f;
 	}
 
 	JsonHelper::ReadBool(profileObj, "croppingEnabled", profile.isCroppingEnabled);
@@ -1112,6 +1132,15 @@ bool AppSettings::_LoadProfile(
 		) {
 			profile.cropping = {};
 		}
+	}
+
+	{
+		uint32_t destAlignment = (uint32_t)DestAlignment::Center;
+		JsonHelper::ReadUInt(profileObj, "destAlignment", destAlignment);
+		if (destAlignment >= (uint32_t)DestAlignment::COUNT) {
+			destAlignment = (uint32_t)DestAlignment::Center;
+		}
+		profile.destAlignment = (DestAlignment)destAlignment;
 	}
 
 	return true;

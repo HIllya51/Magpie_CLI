@@ -199,7 +199,7 @@ winrt::fire_and_forget Renderer::TakeScreenshot(
 	}
 }
 
-void Renderer::_FrontendRender(bool waitForRenderComplete) noexcept {
+void Renderer::_FrontendRender(bool waitForGpu) noexcept {
 	winrt::com_ptr<ID3D11Texture2D> frameTex;
 	winrt::com_ptr<ID3D11RenderTargetView> frameRtv;
 	POINT drawOffset;
@@ -267,10 +267,10 @@ void Renderer::_FrontendRender(bool waitForRenderComplete) noexcept {
 	// 绘制光标
 	_cursorDrawer.Draw(frameTex.get(), drawOffset);
 	
-	_presenter->EndFrame(waitForRenderComplete);
+	_presenter->EndFrame(waitForGpu);
 }
 
-bool Renderer::Render(bool force, bool waitForRenderComplete) noexcept {
+bool Renderer::Render(bool force, bool waitForGpu) noexcept {
 	if (!force && _lastAccessMutexKey == _sharedTextureMutexKey.load(std::memory_order_relaxed)) {
 		if (_lastAccessMutexKey == 0) {
 			// 第一帧尚未完成
@@ -282,7 +282,7 @@ bool Renderer::Render(bool force, bool waitForRenderComplete) noexcept {
 		}
 	}
 
-	_FrontendRender(waitForRenderComplete);
+	_FrontendRender(waitForGpu);
 	return true;
 }
 
@@ -699,14 +699,43 @@ ID3D11Texture2D* Renderer::_ResizeEffects() noexcept {
 
 void Renderer::_UpdateDestRect() noexcept {
 	const RECT& rendererRect = ScalingWindow::Get().RendererRect();
+	DestAlignment alignment = ScalingWindow::Get().Options().destAlignment;
 
-	D3D11_TEXTURE2D_DESC desc;
-	_frontendSharedTexture->GetDesc(&desc);
+	LONG destWidth;
+	LONG destHeight;
+	{
+		D3D11_TEXTURE2D_DESC desc;
+		_frontendSharedTexture->GetDesc(&desc);
+		destWidth = (LONG)desc.Width;
+		destHeight = (LONG)desc.Height;
+	}
 
-	_destRect.left = (rendererRect.left + rendererRect.right - (LONG)desc.Width) / 2;
-	_destRect.top = (rendererRect.top + rendererRect.bottom - (LONG)desc.Height) / 2;
-	_destRect.right = _destRect.left + (LONG)desc.Width;
-	_destRect.bottom = _destRect.top + (LONG)desc.Height;
+	using enum DestAlignment;
+
+	if (alignment == LeftTop || alignment == Left || alignment == LeftBottom) {
+		_destRect.left = 0;
+		_destRect.right = destWidth;
+	} else if (alignment == Top || alignment == Center || alignment == Bottom) {
+		_destRect.left = (rendererRect.left + rendererRect.right - destWidth) / 2;
+		_destRect.right = _destRect.left + destWidth;
+	} else {
+		_destRect.left = rendererRect.right - destWidth;
+		_destRect.right = rendererRect.right;
+	}
+
+	if (alignment == LeftTop || alignment == Top || alignment == RightTop) {
+		_destRect.top = 0;
+		_destRect.bottom = destHeight;
+	} else if (alignment == Left || alignment == Center || alignment == Right) {
+		_destRect.top = (rendererRect.top + rendererRect.bottom - destHeight) / 2;
+		_destRect.bottom = _destRect.top + destHeight;
+	} else {
+		_destRect.top = rendererRect.bottom - destHeight;
+		_destRect.bottom = rendererRect.bottom;
+	}
+
+	assert(_destRect.left + destWidth == _destRect.right);
+	assert(_destRect.top + destHeight == _destRect.bottom);
 }
 
 HANDLE Renderer::_CreateSharedTexture(ID3D11Texture2D* effectsOutput) noexcept {
