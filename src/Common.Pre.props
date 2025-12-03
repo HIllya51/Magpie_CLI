@@ -24,11 +24,22 @@
 
   <PropertyGroup>
     <DefaultLanguage>en-US</DefaultLanguage>
+    <MajorVersion Condition="'$(MajorVersion)' == ''">0</MajorVersion>
+    <MinorVersion Condition="'$(MinorVersion)' == ''">0</MinorVersion>
+    <PatchVersion Condition="'$(PatchVersion)' == ''">0</PatchVersion>
+	<!-- 可通过 VersionString 区分开发版本和发布版本 -->
+    <VersionString Condition="'$(VersionString)' == '' And ('$(MajorVersion)' != '0' Or '$(MinorVersion)' != '0' Or '$(PatchVersion)' != '0')">$(MajorVersion).$(MinorVersion).$(PatchVersion)</VersionString>
   </PropertyGroup>
 
   <PropertyGroup Label="Configuration">
     <PlatformToolset Condition="$(UseClangCL)">ClangCL</PlatformToolset>
-    <PlatformToolset Condition="!$(UseClangCL)">v143</PlatformToolset>
+    <VS17 Condition="$([System.String]::new('$(MSBuildVersion)').StartsWith('17'))">true</VS17>
+    <VS17 Condition="'$(VS17)' != 'true'">false</VS17>
+    <MinimumVisualStudioVersion>17.0</MinimumVisualStudioVersion>
+    <VCProjectVersion Condition="$(VS17)">17.0</VCProjectVersion>
+    <VCProjectVersion Condition="!$(VS17)">18.0</VCProjectVersion>
+    <PlatformToolset Condition="!$(UseClangCL) And $(VS17)">v143</PlatformToolset>
+    <PlatformToolset Condition="!$(UseClangCL) And !$(VS17)">v145</PlatformToolset>
     <UseDebugLibraries Condition="'$(Configuration)' == 'Debug'">true</UseDebugLibraries>
     <WholeProgramOptimization Condition="'$(Configuration)' == 'Release'">true</WholeProgramOptimization>
   </PropertyGroup>

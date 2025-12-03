@@ -56,8 +56,10 @@ static void LogRects(const RECT& srcRect, const RECT& rendererRect, const RECT& 
 
 ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 	Logger::Get().Info(fmt::format("缩放开始\n\t程序版本: {}\n\tOS 版本: {}\n\t管理员: {}",
-#ifdef MP_VERSION_TAG
-		STRING(MP_VERSION_TAG),
+#ifdef MP_VERSION_STRING
+		STRINGIFY(MP_VERSION_STRING),
+#elif defined(MP_COMMIT_ID)
+		"dev (" STRINGIFY(MP_COMMIT_ID) ")",
 #else
 		"dev",
 #endif
@@ -489,6 +491,9 @@ LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) n
 	{
 		// 调整窗口大小时会进入 OS 的内部循环，我们的消息循环没有机会调用 Render。幸运的是
 		// 内部循环会正常分发消息，因此有必要在窗口过程中执行渲染以避免调整大小时渲染暂停。
+		if (!_renderer) {
+			return 0;
+		}
 		
 		// 删除消息队列中的其他 WM_FRONTEND_RENDER 以避免重复渲染
 		{

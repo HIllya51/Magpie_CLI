@@ -32,11 +32,11 @@ jobs:
       matrix:
         platform: ["x64", "ARM64"]
     steps:
-    - uses: actions/checkout@v5
+    - uses: actions/checkout@v6
 
     - uses: actions/setup-python@v6
       with:
-        python-version: '3.11'
+        python-version: '3.13'
 
     - name: Setup Conan
       run: pip install conan
@@ -48,7 +48,9 @@ jobs:
         echo "tag=$tag" >> $env:GITHUB_OUTPUT
 
     - name: Build
-      run: python scripts/publish.py --compiler=ClangCL --platform=${{ matrix.platform }} --version-major=${{ inputs.major }} --version-minor=${{ inputs.minor }} --version-patch=${{ inputs.patch }} --version-tag=${{ steps.tag.outputs.tag }} --pfx-path=certs\Magpie.pfx --pfx-password="${{ secrets.MAGPIE_PFX_PASSWORD }}"
+      run: |
+        $versionString = "${{ steps.tag.outputs.tag }}" -replace "^v(?=\d)", ""
+        python scripts/publish.py --compiler=ClangCL --platform=${{ matrix.platform }} --version-major=${{ inputs.major }} --version-minor=${{ inputs.minor }} --version-patch=${{ inputs.patch }} --version-string=$versionString --pfx-path=certs\Magpie.pfx --pfx-password="${{ secrets.MAGPIE_PFX_PASSWORD }}"
     
     - name: Store artifacts
       uses: actions/upload-artifact@v5
@@ -59,11 +61,11 @@ jobs:
     runs-on: windows-latest
     needs: build
     steps:
-      - uses: actions/checkout@v5
+      - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v6
         with:
-          python-version: '3.11'
+          python-version: '3.13'
 
       - name: Setup Requests
         run: pip install requests
