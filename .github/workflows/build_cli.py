@@ -16,11 +16,9 @@ if not os.access(msbuildPath, os.X_OK):
 
 
 p = subprocess.run(
-    f'"{msbuildPath}" Magpie.slnx -m -t:Rebuild -restore -p:RestorePackagesConfig=true;Configuration=Release;Platform=x64;DisablePDB=true;OutDir={os.getcwd()}\\publish\\x64\\'
+    f'"{msbuildPath}" Magpie.slnx -m -t:Magpie_Core;Effects;CLI -restore -p:RestorePackagesConfig=true;Configuration=Release;Platform=x64;DisablePDB=true;OutDir={os.getcwd()}\\publish\\x64\\'
 )
-subprocess.run(
-    f'"{msbuildPath}" -restore -p:RestorePackagesConfig=true;Configuration=Release;Platform=x64;OutDir={os.getcwd()}\\publish\\x64\\ -t:Magpie_Core;Effects;CLI Magpie.sln'
-)
+
 os.makedirs(f"ALL/Magpie", exist_ok=True)
 shutil.move("publish/x64/Magpie.Core.exe", f"ALL/Magpie")
 shutil.move("publish/x64/effects", f"ALL/Magpie")
