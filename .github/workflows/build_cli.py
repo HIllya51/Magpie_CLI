@@ -15,6 +15,9 @@ if not os.access(msbuildPath, os.X_OK):
     raise Exception("未找到 msbuild")
 
 
+p = subprocess.run(
+    f'"{msbuildPath}" Magpie.slnx -m -t:Rebuild -restore -p:RestorePackagesConfig=true;Configuration=Release;Platform=x64;DisablePDB=true;OutDir={os.getcwd()}\\publish\\x64\\;'
+)
 subprocess.run(
     f'"{msbuildPath}" -restore -p:RestorePackagesConfig=true;Configuration=Release;Platform=x64;OutDir={os.getcwd()}\\publish\\x64\\ -t:Magpie_Core;Effects;CLI Magpie.sln'
 )
