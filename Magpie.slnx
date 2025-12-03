@@ -16,6 +16,7 @@
     <File Path="natvis/phmap.natvis" />
     <File Path="natvis/rapidjson.natvis" />
   </Folder>
+  <Project Path="src/CLI/CLI.vcxproj" />
   <Project Path="src/Effects/Effects.vcxproj" Id="62503530-b84b-4cc2-80b6-3f89618172b7" />
   <Project Path="src/Magpie.Core/Magpie.Core.vcxproj" Id="0e5205ae-dfa9-4cb8-b662-e43cd6512e2a">
     <BuildDependency Project="src/_ConanDeps/_ConanDeps.vcxproj" />
