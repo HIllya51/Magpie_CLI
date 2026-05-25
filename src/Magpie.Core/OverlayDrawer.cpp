@@ -343,7 +343,7 @@ SmallVector<ImWchar> OverlayDrawer::_BuildFontUI(
 		SetGlyphRanges(ranges, OverlayHelper::BASIC_LATIN_RANGES);
 	} else if (language == L"ru" || language == L"uk") {
 		SetGlyphRanges(ranges, fontAtlas.GetGlyphRangesCyrillic());
-	} else if (language == L"tr" || language == L"pl") {
+	} else if (language == L"tr" || language == L"pl" || language == L"fi") {
 		SetGlyphRanges(ranges, OverlayHelper::EXTENDED_LATIN_RANGES);
 	} else if (language == L"vi") {
 		SetGlyphRanges(ranges, fontAtlas.GetGlyphRangesVietnamese());
