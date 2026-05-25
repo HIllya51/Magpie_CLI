@@ -26,6 +26,7 @@ const auto Magpie_Core_CLI_Message_Start = L"Magpie_Core_CLI_Message_Start";
 const auto Magpie_Core_CLI_Message_Start_WindowedMode = L"Magpie_Core_CLI_Message_Start_WindowedMode";
 
 const auto WNDCLS_Magpie_Core_CLI_Message = L"WNDCLS_Magpie_Core_CLI_Message";
+static auto Magpie_Core_CLI_ErrorMessage = RegisterWindowMessage(L"Magpie_Core_CLI_ErrorMessage");
 static auto Magpie_Core_CLI_ToastMessage = RegisterWindowMessage(L"Magpie_Core_CLI_ToastMessage");
 static auto Magpie_Core_CLI_ScalingOptions_Save = RegisterWindowMessage(L"Magpie_Core_CLI_ScalingOptions_Save");
 
@@ -307,7 +308,7 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
         PostMessage(HWND_BROADCAST, Magpie_Core_CLI_ToastMessage, (WPARAM)atom, 0);
     };
 	options.showError = [](HWND hWnd, ScalingError error) noexcept {
-		MessageBoxA(0, std::to_string((int)error).c_str(), "Error", 0);
+        PostMessage(HWND_BROADCAST, Magpie_Core_CLI_ErrorMessage, (WPARAM)error, 0);
 	};
     options.save = [](const ScalingOptions& options, HWND /*hwndScaling*/) noexcept {
         auto atom = GlobalAddAtomA(SeriesOverlayOptions(options).c_str());
