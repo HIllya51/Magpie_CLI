@@ -18,6 +18,7 @@
 #pragma comment(lib, "Dwmapi.lib")
 #pragma comment(lib, "Magnification.lib")
 #pragma comment(lib, "Dcomp.lib")
+#pragma comment(lib, "bcp47mrm.lib")
 using namespace Magpie;
 
 const auto Magpie_Core_CLI_Message_Exit = L"Magpie_Core_CLI_Message_Exit";

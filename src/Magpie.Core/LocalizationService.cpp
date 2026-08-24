@@ -71,6 +71,7 @@ std::span<const wchar_t*> LocalizationService::GetSupportedLanguages() noexcept 
 }
 
 winrt::hstring LocalizationService::GetLocalizedString(std::wstring_view resName) const noexcept {
+#if 0
 	assert(_language);
 
 	static const wchar_t* APP_RESOURCE_MAP_ID = L"Magpie/Resources";
@@ -78,6 +79,8 @@ winrt::hstring LocalizationService::GetLocalizedString(std::wstring_view resName
 	thread_local static winrt::ResourceLoader resourceLoader =
 		winrt::ResourceLoader::GetForViewIndependentUse(APP_RESOURCE_MAP_ID);
 	return resourceLoader.GetString(resName);
+#endif
+	return winrt::hstring(resName);
 }
 
 void LocalizationService::_SetLanguage(const wchar_t* tag) {
