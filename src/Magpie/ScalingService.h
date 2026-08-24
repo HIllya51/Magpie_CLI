@@ -1,10 +1,8 @@
 #pragma once
 #include "Event.h"
+#include "ScalingOptions.h"
 #include "ScalingRuntime.h"
-
-namespace Magpie {
-class ScalingRuntime;
-}
+#include <winrt/Magpie.h>
 
 namespace Magpie {
 
@@ -21,7 +19,7 @@ public:
 
 	void Initialize();
 
-	void Uninitialize();
+	void Uninitialize() noexcept;
 
 	void StartTimer(bool windowedMode);
 

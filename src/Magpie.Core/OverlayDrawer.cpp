@@ -5,6 +5,7 @@
 #include "EffectDesc.h"
 #include "FrameSourceBase.h"
 #include "ImGuiFontsCacheManager.h"
+#include "LocalizationService.h"
 #include "Logger.h"
 #include "OverlayHelper.h"
 #include "Renderer.h"
@@ -292,7 +293,7 @@ bool OverlayDrawer::_BuildFonts() noexcept {
 			return false;
 		}
 	} else {
-		const uint32_t dpi = (uint32_t)std::lroundf(_dpiScale * USER_DEFAULT_SCREEN_DPI);
+		const uint32_t dpi = (uint32_t)std::lround(_dpiScale * USER_DEFAULT_SCREEN_DPI);
 		if (ImGuiFontsCacheManager::Get().Load(language, dpi, fontAtlas)) {
 			_fontUI = fontAtlas.Fonts[0];
 			_fontMonoNumbers = fontAtlas.Fonts[1];
@@ -616,7 +617,7 @@ void OverlayDrawer::_DrawTimelineItem(
 	ImGui::PopStyleColor(3);
 
 	if (ImGui::IsItemHovered() || ImGui::IsItemClicked()) {
-		std::string content = fmt::format("{}\n{:.3f} ms\n{}%", name, time, std::lroundf(time / effectsTotalTime * 100));
+		std::string content = fmt::format("{}\n{:.3f} ms\n{}%", name, time, std::lround(time / effectsTotalTime * 100));
 		ImGui::PushFont(_fontMonoNumbers);
 		_imguiImpl.Tooltip(content.c_str(), _dpiScale, nullptr, 500 * dpiScale);
 		ImGui::PopFont();
@@ -625,7 +626,7 @@ void OverlayDrawer::_DrawTimelineItem(
 	// 空间足够时显示文字
 	std::string text;
 	if (selected) {
-		text = fmt::format("{}%", std::lroundf(time / effectsTotalTime * 100));
+		text = fmt::format("{}%", std::lround(time / effectsTotalTime * 100));
 	} else {
 		text.assign(name);
 	}
@@ -752,10 +753,14 @@ bool OverlayDrawer::_DrawToolbar(uint32_t fps, int& itemId) noexcept {
 		ImGui::SameLine();
 		const std::string& screenshotStr = _GetResourceString(L"Overlay_Toolbar_TakeScreenshot");
 		const std::string& screenshotDescStr = _GetResourceString(L"Overlay_Toolbar_TakeScreenshot_Description");
-		if (drawButton(OverlayHelper::SegoeIcons::Camera, screenshotStr.c_str(), screenshotDescStr.c_str())) {
-			const std::vector<const EffectDesc*>& effectDescs =
-				ScalingWindow::Get().Renderer().ActiveEffectDescs();
-			ScalingWindow::Get().Renderer().TakeScreenshot((uint32_t)effectDescs.size() - 1);
+
+		// 提示文字追加快捷键
+		const OverlayOptions& overlayOptions = ScalingWindow::Get().Options().overlayOptions;
+		std::string screenshotButtonStr =
+			StrHelper::Concat(screenshotStr, " (", overlayOptions.takeScreenshotShortcut, ")");
+		
+		if (drawButton(OverlayHelper::SegoeIcons::Camera, screenshotButtonStr.c_str(), screenshotDescStr.c_str())) {
+			ScalingWindow::Get().TakeScreenshot();
 		}
 		// 截图按钮右键菜单
 		if (ImGui::BeginPopupContextItem()) {
@@ -854,13 +859,20 @@ bool OverlayDrawer::_DrawToolbar(uint32_t fps, int& itemId) noexcept {
 			ImGui::SameLine();
 		}
 
+		const bool isWindowedMode = ScalingWindow::Get().Options().IsWindowedMode();
+
 		{
-			const bool isWindowedMode = ScalingWindow::Get().Options().IsWindowedMode();
 			const ImWchar icon = isWindowedMode ?
 				OverlayHelper::SegoeIcons::FullScreen : OverlayHelper::SegoeIcons::Favicon;
 			const std::string& switchScalingStr = _GetResourceString(
 				isWindowedMode ? L"Overlay_Toolbar_SwitchToFullscreen" : L"Overlay_Toolbar_SwitchToWindowed");
-			if (drawButton(icon, switchScalingStr.c_str())) {
+
+			// 提示文字追加快捷键
+			const std::string& scaleShortcut =
+				isWindowedMode ? overlayOptions.scaleShortcut : overlayOptions.windowedModeScaleShortcut;
+			std::string switchScalingButtonStr = StrHelper::Concat(switchScalingStr, " (", scaleShortcut, ")");
+
+			if (drawButton(icon, switchScalingButtonStr.c_str())) {
 				ScalingWindow::Dispatcher().TryEnqueue([]() {
 					ScalingWindow::Get().ToggleScaling(!ScalingWindow::Get().Options().IsWindowedMode());
 				});
@@ -874,7 +886,14 @@ bool OverlayDrawer::_DrawToolbar(uint32_t fps, int& itemId) noexcept {
 
 		const std::string& closeStr = _GetResourceString(L"Overlay_Toolbar_Close");
 		const std::string& closeDescStr = _GetResourceString(L"Overlay_Toolbar_Close_Description");
-		if (drawButton(OverlayHelper::SegoeIcons::Cancel, closeStr.c_str(), closeDescStr.c_str())) {
+
+		// 提示文字追加快捷键
+		const std::string& closeShortcut =
+			isWindowedMode ? overlayOptions.windowedModeScaleShortcut : overlayOptions.scaleShortcut;
+		std::string closeButtonStr =
+			StrHelper::Concat(closeStr, " (", closeShortcut, ")");
+
+		if (drawButton(OverlayHelper::SegoeIcons::Cancel, closeButtonStr.c_str(), closeDescStr.c_str())) {
 			ScalingWindow::Dispatcher().TryEnqueue([]() {
 				ScalingWindow::Get().Stop();
 			});
@@ -1286,7 +1305,8 @@ const std::string& OverlayDrawer::_GetResourceString(const std::wstring_view& ke
 		return it->second;
 	}
 
-	return cache[key] = StrHelper::UTF16ToUTF8(ScalingWindow::Get().GetLocalizedString(key));
+	LocalizationService& ls = LocalizationService::Get();
+	return cache[key] = StrHelper::UTF16ToUTF8(ls.GetLocalizedString(key));
 }
 
 float OverlayDrawer::_CalcToolbarAlpha() const noexcept {

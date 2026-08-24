@@ -196,7 +196,7 @@ ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 					windowWidth = srcSize.cx;
 				}
 			} else {
-				windowWidth = (LONG)std::lroundf(srcSize.cx * _options.initialWindowedScaleFactor);
+				windowWidth = (LONG)std::lround(srcSize.cx * _options.initialWindowedScaleFactor);
 			}
 		} else {
 			// 恢复上次窗口模式缩放尺寸
@@ -384,6 +384,13 @@ void ScalingWindow::ToggleScaling(bool isWindowedMode) noexcept {
 void ScalingWindow::SwitchToolbarState() noexcept {
 	if (_renderer) {
 		_renderer->SwitchToolbarState();
+	}
+}
+
+void ScalingWindow::TakeScreenshot() noexcept {
+	if (_renderer) {
+		const std::vector<const EffectDesc*>& effectDescs = _renderer->ActiveEffectDescs();
+		_renderer->TakeScreenshot((uint32_t)effectDescs.size() - 1);
 	}
 }
 
@@ -972,23 +979,23 @@ bool ScalingWindow::_CalcWindowedScalingWindowSize(int& width, int& height, bool
 	int rendererHeight;
 	if (width != 0) {
 		rendererWidth = width;
-		rendererHeight = (int)std::lroundf(rendererWidth * srcAspectRatio);
+		rendererHeight = (int)std::lround(rendererWidth * srcAspectRatio);
 	} else {
 		assert(height != 0);
 		rendererHeight = height;
-		rendererWidth = (int)std::lroundf(rendererHeight / srcAspectRatio);
+		rendererWidth = (int)std::lround(rendererHeight / srcAspectRatio);
 	}
 
 	// 确保渲染窗口比源窗口稍大
 	if (rendererWidth > rendererHeight) {
 		if (rendererHeight < minRendererHeight) {
 			rendererHeight = minRendererHeight;
-			rendererWidth = (int)std::lroundf(rendererHeight / srcAspectRatio);
+			rendererWidth = (int)std::lround(rendererHeight / srcAspectRatio);
 		}
 	} else {
 		if (rendererWidth < minRendererWidth) {
 			rendererWidth = minRendererWidth;
-			rendererHeight = (int)std::lroundf(rendererWidth * srcAspectRatio);
+			rendererHeight = (int)std::lround(rendererWidth * srcAspectRatio);
 		}
 	}
 
@@ -1000,13 +1007,13 @@ bool ScalingWindow::_CalcWindowedScalingWindowSize(int& width, int& height, bool
 	const int maxHeight = GetSystemMetricsForDpi(SM_CYMAXTRACK, dpi);
 	if (width > maxWidth || height > maxHeight) {
 		// 尝试最大宽度，失败则使用最大高度
-		int testHeight = (int)std::lroundf((maxWidth - xExtraSpace) * srcAspectRatio) + yExtraSpace;
+		int testHeight = (int)std::lround((maxWidth - xExtraSpace) * srcAspectRatio) + yExtraSpace;
 		if (testHeight < maxHeight) {
 			width = maxWidth;
 			height = testHeight;
 		} else {
 			height = maxHeight;
-			width = (int)std::lroundf((maxHeight - yExtraSpace) / srcAspectRatio) + xExtraSpace;
+			width = (int)std::lround((maxHeight - yExtraSpace) / srcAspectRatio) + xExtraSpace;
 		}
 
 		rendererWidth = width - xExtraSpace;
@@ -1179,10 +1186,10 @@ ScalingError ScalingWindow::_InitialMoveSrcWindowInFullscreen() noexcept {
 	// 无需考虑被任务栏遮挡，缩放时任务栏将自动隐藏。
 	bool shouldMove = false;
 	if (_options.captureMethod == CaptureMethod::DesktopDuplication) {
-		shouldMove = !PtInRect(&mi.rcMonitor, POINT{ srcRect.left,srcRect.top })
-			|| !PtInRect(&mi.rcMonitor, POINT{ srcRect.left,srcRect.bottom })
-			|| !PtInRect(&mi.rcMonitor, POINT{ srcRect.right,srcRect.top })
-			|| !PtInRect(&mi.rcMonitor, POINT{ srcRect.right,srcRect.bottom });
+		shouldMove = !Win32Helper::PtInRect(mi.rcMonitor, POINT{ srcRect.left,srcRect.top })
+			|| !Win32Helper::PtInRect(mi.rcMonitor, POINT{ srcRect.left,srcRect.bottom })
+			|| !Win32Helper::PtInRect(mi.rcMonitor, POINT{ srcRect.right,srcRect.top })
+			|| !Win32Helper::PtInRect(mi.rcMonitor, POINT{ srcRect.right,srcRect.bottom });
 	} else {
 		shouldMove = !MonitorFromPoint(POINT{ srcRect.left,srcRect.top }, MONITOR_DEFAULTTONULL)
 			|| !MonitorFromPoint(POINT{ srcRect.left,srcRect.bottom }, MONITOR_DEFAULTTONULL)
@@ -1530,7 +1537,7 @@ LRESULT ScalingWindow::_BorderHelperWndProc(HWND hWnd, UINT msg, WPARAM wParam, 
 
 			RECT clientRect;
 			GetClientRect(hWnd, &clientRect);
-			if (!PtInRect(&clientRect, cursorPos)) {
+			if (!Win32Helper::PtInRect(clientRect, cursorPos)) {
 				return HTNOWHERE;
 			}
 

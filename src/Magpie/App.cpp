@@ -122,8 +122,6 @@ bool App::Initialize(const wchar_t* arguments) {
 
 	_mainWindow = std::make_unique<class MainWindow>();
 
-	EffectsService::Get().Initialize();
-
 	// 初始化 XAML 框架。退出时也不要关闭，如果正在播放动画会崩溃。文档中的清空消息队列的做法无用。
 	_windowsXamlManager = Hosting::WindowsXamlManager::InitializeForCurrentThread();
 
@@ -154,6 +152,20 @@ bool App::Initialize(const wchar_t* arguments) {
 		return false;
 	}
 
+	// 尽可能早的初始化 LocalizationService
+	LocalizationService::Get().Initialize(settings.Language());
+	// 会在后台解析效果，应尽可能早的初始化
+	EffectsService::Get().Initialize();
+	ToastService::Get().Initialize();
+	if (!AdaptersService::Get().Initialize()) {
+		_Uninitialize();
+		return false;
+	}
+	ShortcutService::Get().Initialize();
+	ScalingService::Get().Initialize();
+	UpdateService::Get().Initialize();
+	ThemeHelper::Initialize();
+
 	// 延迟注册 DependencyProperty，见 FixThreadPoolCrash
 	SettingsCard::RegisterDependencyProperties();
 	SettingsExpander::RegisterDependencyProperties();
@@ -166,17 +178,6 @@ bool App::Initialize(const wchar_t* arguments) {
 	_themeChangedRevoker = AppSettings::Get().ThemeChanged(
 		auto_revoke, std::bind_front(&App::_AppSettings_ThemeChanged, this));
 	_AppSettings_ThemeChanged(AppSettings::Get().Theme());
-
-	LocalizationService::Get().Initialize();
-	ToastService::Get().Initialize();
-	if (!AdaptersService::Get().Initialize()) {
-		_Uninitialize();
-		return false;
-	}
-	ShortcutService::Get().Initialize();
-	ScalingService::Get().Initialize();
-	UpdateService::Get().Initialize();
-	ThemeHelper::Initialize();
 
 	NotifyIconService& notifyIconService = NotifyIconService::Get();
 	notifyIconService.Initialize();
@@ -280,7 +281,7 @@ INumberFormatter2 App::DoubleFormatter() {
 	return numberFormatter;
 }
 
-void App::_Uninitialize() {
+void App::_Uninitialize() noexcept {
 	NotifyIconService::Get().Uninitialize();
 	UpdateService::Get().Uninitialize();
 	ScalingService::Get().Uninitialize();
@@ -289,6 +290,7 @@ void App::_Uninitialize() {
 	AdaptersService::Get().Uninitialize();
 	ToastService::Get().Uninitialize();
 	EffectsService::Get().Uninitialize();
+	AppSettings::Get().Uninitialize();
 
 	_colorValuesChangedRevoker.revoke();
 	_isShowNotifyIconChangedRevoker.Revoke();

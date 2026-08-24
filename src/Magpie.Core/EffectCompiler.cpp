@@ -1442,7 +1442,7 @@ void __M(uint3 tid : SV_GroupThreadID, uint3 gid : SV_GroupID) {{
 		// 大部分情况下 BLOCK_SIZE 都是 2 的整数次幂，这时将乘法转换为位移
 		std::string blockStartExpr;
 		if (passDesc.blockSize.first == passDesc.blockSize.second && std::has_single_bit(passDesc.blockSize.first)) {
-			uint32_t nShift = std::lroundf(std::log2f((float)passDesc.blockSize.first));
+			uint32_t nShift = std::lround(std::log2f((float)passDesc.blockSize.first));
 			blockStartExpr = fmt::format("(gid.xy << {})", nShift);
 		} else {
 			blockStartExpr = fmt::format("gid.xy * uint2({}, {})", passDesc.blockSize.first, passDesc.blockSize.second);
@@ -1519,7 +1519,7 @@ static uint32_t CompilePasses(
 				if (d.constant.index() == 0) {
 					cbHlsl.append(std::to_string(it->second)).append("f");
 				} else {
-					cbHlsl.append(std::to_string((int)std::lroundf(it->second)));
+					cbHlsl.append(std::to_string((int)std::lround(it->second)));
 				}
 			}
 
@@ -1638,7 +1638,7 @@ uint32_t EffectCompiler::Compile(
 
 		if (flags & EffectCompilerFlags::InlineParams) {
 			for (const auto& pair : *inlineParams) {
-				cacheKey.append(fmt::format("{}={}\n", pair.first, std::lroundf(pair.second * 10000)));
+				cacheKey.append(fmt::format("{}={}\n", pair.first, std::lround(pair.second * 10000)));
 			}
 		}
 

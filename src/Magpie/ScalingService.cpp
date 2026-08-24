@@ -1,13 +1,13 @@
 #include "pch.h"
+#include "ScalingService.h"
 #include "App.h"
 #include "AppSettings.h"
-#include "CommonSharedConstants.h"
 #include "EffectsService.h"
+#include "LocalizationService.h"
 #include "Logger.h"
 #include "ProfileService.h"
 #include "ScalingMode.h"
 #include "ScalingModesService.h"
-#include "ScalingService.h"
 #include "ShortcutService.h"
 #include "ToastService.h"
 #include "TouchHelper.h"
@@ -51,7 +51,7 @@ void ScalingService::Initialize() {
 	_CheckForegroundTimer_Tick(nullptr, nullptr);
 }
 
-void ScalingService::Uninitialize() {
+void ScalingService::Uninitialize() noexcept {
 	if (!_scalingRuntime) {
 		return;
 	}
@@ -125,6 +125,11 @@ void ScalingService::_ShortcutService_ShortcutPressed(ShortcutAction action) {
 		_scalingRuntime->SwitchToolbarState();
 		break;
 	}
+	case ShortcutAction::TakeScreenshot:
+	{
+		_scalingRuntime->TakeScreenshot();
+		break;	
+	}
 	default:
 		break;
 	}
@@ -195,10 +200,9 @@ static void ShowError(HWND hWnd, ScalingError error) noexcept {
 		return;
 	}
 
-	ResourceLoader resourceLoader =
-		ResourceLoader::GetForViewIndependentUse(CommonSharedConstants::APP_RESOURCE_MAP_ID);
-	hstring title = isFail ? resourceLoader.GetString(L"Message_ScalingFailed") : hstring{};
-	ToastService::Get().ShowMessageOnWindow(title, resourceLoader.GetString(key), hWnd);
+	LocalizationService& ls = LocalizationService::Get();
+	hstring title = isFail ? ls.GetLocalizedString(L"Message_ScalingFailed") : hstring{};
+	ToastService::Get().ShowMessageOnWindow(title, ls.GetLocalizedString(key), hWnd);
 	Logger::Get().Error(fmt::format("缩放失败\n\t错误码: {}", (int)error));
 }
 
@@ -362,7 +366,7 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 		options.maxFrameRate = profile.maxFrameRate;
 	}
 	options.multiMonitorUsage = profile.multiMonitorUsage;
-	options.destAlignment = profile.destAlignment;
+	options.outputAlignment = profile.outputAlignment;
 	options.cursorInterpolationMode = profile.cursorInterpolationMode;
 	options.flags = profile.scalingFlags;
 
@@ -467,7 +471,14 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 		options.screenshotsDir = L".";
 	}
 
-	options.overlayOptions = settings.OverlayOptions();
+	options.overlayOptions.windows = settings.OverlayWindowOptions();
+
+	options.overlayOptions.scaleShortcut =
+		settings.GetShortcut(ShortcutAction::Scale).ToString();
+	options.overlayOptions.windowedModeScaleShortcut =
+		settings.GetShortcut(ShortcutAction::WindowedModeScale).ToString();
+	options.overlayOptions.takeScreenshotShortcut =
+		settings.GetShortcut(ShortcutAction::TakeScreenshot).ToString();
 
 	options.showToast = [](HWND hwndTarget, std::wstring_view msg) noexcept {
 		ToastService::Get().ShowMessageOnWindow({}, msg, hwndTarget);
@@ -477,8 +488,8 @@ ScalingError ScalingService::_StartScaleImpl(HWND hWnd, const Profile& profile, 
 
 	options.save = [](const ScalingOptions& options, HWND /*hwndScaling*/) noexcept {
 		App::Get().Dispatcher().TryEnqueue(
-			[overlayOptions(options.overlayOptions)]() {
-				AppSettings::Get().OverlayOptions() = std::move(overlayOptions);
+			[overlayOptions(options.overlayOptions)]() mutable {
+				AppSettings::Get().OverlayWindowOptions() = std::move(overlayOptions.windows);
 				AppSettings::Get().SaveAsync();
 			}
 		);

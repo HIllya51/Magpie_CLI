@@ -1,4 +1,5 @@
 #include "pch.h"
+#include "Renderer.h"
 #include "CommonSharedConstants.h"
 #include "DesktopDuplicationFrameSource.h"
 #include "DeviceResources.h"
@@ -9,9 +10,9 @@
 #include "EffectsProfiler.h"
 #include "GDIFrameSource.h"
 #include "GraphicsCaptureFrameSource.h"
+#include "LocalizationService.h"
 #include "Logger.h"
 #include "OverlayDrawer.h"
-#include "Renderer.h"
 #include "ScalingOptions.h"
 #include "ScalingWindow.h"
 #include "ScreenshotHelper.h"
@@ -23,8 +24,8 @@
 #else
 #include "AdaptivePresenter.h"
 #endif
-#include <dispatcherqueue.h>
 #include <d3dkmthk.h>
+#include <dispatcherqueue.h>
 
 namespace Magpie {
 
@@ -194,8 +195,8 @@ winrt::fire_and_forget Renderer::TakeScreenshot(
 
 	if (!co_await _TakeScreenshotImpl(effectIdx, passIdx, outputIdx)) {
 		Logger::Get().Error("_TakeScreenshotImpl 失败");
-		ScalingWindow::Get().ShowToast(
-			ScalingWindow::Get().GetLocalizedString(L"Message_ScreenshotFailed"));
+		LocalizationService& ls = LocalizationService::Get();
+		ScalingWindow::Get().ShowToast(ls.GetLocalizedString(L"Message_ScreenshotFailed"));
 	}
 }
 
@@ -359,9 +360,10 @@ void Renderer::OnMove() noexcept {
 
 void Renderer::SwitchToolbarState() noexcept {
 	const ScalingWindow& scalingWindow = ScalingWindow::Get();
+	LocalizationService& ls = LocalizationService::Get();
 
 	if (scalingWindow.Options().Is3DGameMode()) {
-		scalingWindow.ShowToast(scalingWindow.GetLocalizedString(L"Message_ToolbarIn3DGameMode"));
+		scalingWindow.ShowToast(ls.GetLocalizedString(L"Message_ToolbarIn3DGameMode"));
 		return;
 	}
 
@@ -379,10 +381,10 @@ void Renderer::SwitchToolbarState() noexcept {
 		stateResName = L"Home_Toolbar_InitialState_AutoHide/Content";
 	}
 
-	winrt::hstring newStateMsg = scalingWindow.GetLocalizedString(L"Message_ToolbarNewState");
+	winrt::hstring newStateMsg = ls.GetLocalizedString(L"Message_ToolbarNewState");
 	scalingWindow.ShowToast(fmt::format(
 		fmt::runtime(std::wstring_view(newStateMsg)),
-		std::wstring_view(scalingWindow.GetLocalizedString(stateResName))
+		std::wstring_view(ls.GetLocalizedString(stateResName))
 	));
 
 	// 立即渲染一帧
@@ -699,7 +701,7 @@ ID3D11Texture2D* Renderer::_ResizeEffects() noexcept {
 
 void Renderer::_UpdateDestRect() noexcept {
 	const RECT& rendererRect = ScalingWindow::Get().RendererRect();
-	DestAlignment alignment = ScalingWindow::Get().Options().destAlignment;
+	OutputAlignment alignment = ScalingWindow::Get().Options().outputAlignment;
 
 	LONG destWidth;
 	LONG destHeight;
@@ -710,7 +712,7 @@ void Renderer::_UpdateDestRect() noexcept {
 		destHeight = (LONG)desc.Height;
 	}
 
-	using enum DestAlignment;
+	using enum OutputAlignment;
 
 	if (alignment == LeftTop || alignment == Left || alignment == LeftBottom) {
 		_destRect.left = 0;
@@ -1233,8 +1235,8 @@ winrt::IAsyncOperation<bool> Renderer::_TakeScreenshotImpl(
 		co_return false;
 	}
 
-	winrt::hstring successMsg =
-		ScalingWindow::Get().GetLocalizedString(L"Message_ScreenshotSaved");
+	LocalizationService& ls = LocalizationService::Get();
+	winrt::hstring successMsg = ls.GetLocalizedString(L"Message_ScreenshotSaved");
 	ScalingWindow::Get().ShowToast(
 		fmt::format(fmt::runtime(std::wstring_view(successMsg)), fileName));
 	co_return true;

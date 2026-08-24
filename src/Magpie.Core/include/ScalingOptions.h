@@ -42,7 +42,7 @@ struct GraphicsCardId {
 	uint32_t deviceId = 0;
 };
 
-enum class DestAlignment {
+enum class OutputAlignment {
 	LeftTop,
 	Top,
 	RightTop,
@@ -77,7 +77,8 @@ struct EffectOption {
 enum class DuplicateFrameDetectionMode {
 	Always,
 	Dynamic,
-	Never
+	Never,
+	COUNT
 };
 
 enum class ToolbarState {
@@ -94,7 +95,7 @@ struct OverlayWindowOption {
 	uint16_t hArea = 0;
 	// 0: 位于上侧，vPos 是窗口上边界和画面上边界距离
 	// 1: 位于中侧，vPos 是窗口中心点和画面上边界距离与画面高度之比
-	// 3: 位于下侧，vPos 是窗口下边界和画面下边界距离
+	// 2: 位于下侧，vPos 是窗口下边界和画面下边界距离
 	uint16_t vArea = 0;
 	float hPos = 0.0f;
 	float vPos = 0.0f;
@@ -102,6 +103,9 @@ struct OverlayWindowOption {
 
 struct OverlayOptions {
 	phmap::flat_hash_map<std::string, OverlayWindowOption> windows;
+	std::string scaleShortcut;
+	std::string windowedModeScaleShortcut;
+	std::string takeScreenshotShortcut;
 };
 
 enum class ScalingError {
@@ -199,7 +203,7 @@ struct ScalingOptions {
 	float cursorScaling = 1.0f;
 	CaptureMethod captureMethod = CaptureMethod::GraphicsCapture;
 	MultiMonitorUsage multiMonitorUsage = MultiMonitorUsage::Closest;
-	DestAlignment destAlignment = DestAlignment::Center;
+	OutputAlignment outputAlignment = OutputAlignment::Center;
 	CursorInterpolationMode cursorInterpolationMode = CursorInterpolationMode::NearestNeighbor;
 	std::optional<float> autoHideCursorDelay;
 	DuplicateFrameDetectionMode duplicateFrameDetectionMode = DuplicateFrameDetectionMode::Dynamic;
