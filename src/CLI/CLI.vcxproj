@@ -54,8 +54,7 @@
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
     <ConfigurationType>Application</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
-    <PlatformToolset Condition="!$(UseClangCL) And $(VS17)">v143</PlatformToolset>
-    <PlatformToolset Condition="!$(UseClangCL) And !$(VS17)">v144</PlatformToolset>
+    <PlatformToolset>v144</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
