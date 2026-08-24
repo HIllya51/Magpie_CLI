@@ -431,12 +431,6 @@ void ScalingWindow::CleanAfterSrcRepositioned() noexcept {
 	_isSrcRepositioning = false;
 }
 
-winrt::hstring ScalingWindow::GetLocalizedString(std::wstring_view resName) const {
-	return winrt::hstring(resName);
-#if 0
-	return _resourceLoader.GetString(resName);
-#endif
-}
 
 LRESULT ScalingWindow::_MessageHandler(UINT msg, WPARAM wParam, LPARAM lParam) noexcept {
 	if (_renderer) {
