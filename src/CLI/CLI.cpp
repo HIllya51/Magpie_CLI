@@ -263,7 +263,7 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
     options.fullscreenInitialToolbarState = config["overlay"]["fullscreenInitialToolbarState"];
     options.windowedInitialToolbarState = config["overlay"]["windowedInitialToolbarState"];
     options.multiMonitorUsage = profile["multiMonitorUsage"];
-	options.destAlignment = profile["destAlignment"];
+	options.outputAlignment= profile["outputAlignment"];
     options.cursorInterpolationMode = profile["cursorInterpolationMode"];
 
     // options.IsTouchSupportEnabled(isTouchSupportEnabled);
