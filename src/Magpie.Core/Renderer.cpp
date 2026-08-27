@@ -263,7 +263,7 @@ void Renderer::_FrontendRender(bool waitForGpu) noexcept {
 	}
 
 	// 绘制叠加层。ImGui 至少渲染两遍，否则经常有布局错误
-	_overlayDrawer.Draw(2, _stepTimer.FPS(), _effectsProfiler.GetTimings(), drawOffset);
+	_overlayDrawer.Draw(2, _stepTimer.GetFPS(), _effectsProfiler.GetTimings(), drawOffset);
 
 	// 绘制光标
 	_cursorDrawer.Draw(frameTex.get(), drawOffset);
@@ -278,7 +278,7 @@ bool Renderer::Render(bool force, bool waitForGpu) noexcept {
 			return false;
 		}
 
-		if (!_cursorDrawer.NeedRedraw() && !_overlayDrawer.NeedRedraw(_stepTimer.FPS())) {
+		if (!_cursorDrawer.NeedRedraw() && !_overlayDrawer.NeedRedraw(_stepTimer.GetFPS())) {
 			return false;
 		}
 	}
@@ -438,7 +438,7 @@ static std::optional<EffectDesc> CompileEffect(
 	// 指定效果名
 	EffectDesc result{ .name = effectOption.name };
 
-	uint32_t compileFlag = 0;
+	EffectCompilerFlags compileFlag = EffectCompilerFlags::None;
 	const ScalingOptions& scalingOptions = ScalingWindow::Get().Options();
 	if (scalingOptions.IsEffectCacheDisabled()) {
 		compileFlag |= EffectCompilerFlags::NoCache;
@@ -798,7 +798,7 @@ void Renderer::_BackendThreadProc() noexcept {
 		return;
 	}
 
-	StepTimerStatus stepTimerStatus = StepTimerStatus::WaitForNewFrame;
+	StepTimerStatus stepTimerStatus = StepTimerStatus::WaitingForNewFrame;
 	const bool waitMsgForNewFrame =
 		_frameSource->WaitType() == FrameSourceWaitType::WaitForMessage;
 
@@ -806,7 +806,7 @@ void Renderer::_BackendThreadProc() noexcept {
 	while (true) {
 		bool fpsUpdated = false;
 		stepTimerStatus = _stepTimer.WaitForNextFrame(
-			waitMsgForNewFrame && stepTimerStatus != StepTimerStatus::WaitForFPSLimiter,
+			waitMsgForNewFrame && stepTimerStatus != StepTimerStatus::WaitingForFPSLimiter,
 			fpsUpdated
 		);
 
@@ -820,7 +820,7 @@ void Renderer::_BackendThreadProc() noexcept {
 			DispatchMessage(&msg);
 		}
 
-		if (stepTimerStatus == StepTimerStatus::WaitForFPSLimiter) {
+		if (stepTimerStatus == StepTimerStatus::WaitingForFPSLimiter) {
 			// 新帧消息可能已被处理，之后的 WaitForNextFrame 不要等待消息，直到状态变化
 			continue;
 		}
@@ -1027,7 +1027,7 @@ bool Renderer::_UpdateDynamicConstants() const noexcept {
 	if (SUCCEEDED(hr)) {
 		// 避免使用 *(uint32_t*)ms.pData，见
 		// https://learn.microsoft.com/en-us/windows/win32/api/d3d11/nf-d3d11-id3d11devicecontext-map
-		const uint32_t frameCount = _stepTimer.FrameCount();
+		const uint32_t frameCount = _stepTimer.GetFrameCount();
 		std::memcpy(ms.pData, &frameCount, 4);
 		d3dDC->Unmap(_dynamicCB.get(), 0);
 	} else {

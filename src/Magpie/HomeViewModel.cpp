@@ -43,8 +43,8 @@ HomeViewModel::HomeViewModel() {
 }
 
 hstring HomeViewModel::TimerDescription() const noexcept {
-	LocalizationService& ls = LocalizationService::Get();
-	hstring fmtStr = ls.GetLocalizedString(L"Home_Activation_Timer_Description");
+	hstring fmtStr = LocalizationService::Get()
+		.GetLocalizedString(L"Home_Activation_Timer_Description");
 	return hstring(fmt::format(
 		fmt::runtime(std::wstring_view(fmtStr)),
 		AppSettings::Get().CountdownSeconds()
@@ -117,8 +117,8 @@ hstring HomeViewModel::UpdateCardTitle() const noexcept {
 		return {};
 	}
 
-	LocalizationService& ls = LocalizationService::Get();
-	hstring titleFmt = ls.GetLocalizedString(L"About_Version_UpdateCard_Title");
+	hstring titleFmt = LocalizationService::Get()
+		.GetLocalizedString(L"About_Version_UpdateCard_Title");
 	return hstring(fmt::format(fmt::runtime(std::wstring_view(titleFmt)), updateService.Tag()));
 }
 
@@ -225,8 +225,8 @@ void HomeViewModel::OpenScreenshotSaveDirectory() const noexcept {
 }
 
 fire_and_forget HomeViewModel::ChangeScreenshotSaveDirectory() noexcept {
-	LocalizationService& ls = LocalizationService::Get();
-	const hstring titleStr = ls.GetLocalizedString(L"Dialog_SelectScreenshotSaveDirectory_Title");
+	const hstring titleStr = LocalizationService::Get()
+		.GetLocalizedString(L"Dialog_SelectScreenshotSaveDirectory_Title");
 
 	const std::filesystem::path oldValue = AppSettings::Get().ScreenshotsDir();
 

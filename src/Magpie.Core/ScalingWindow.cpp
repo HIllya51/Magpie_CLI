@@ -18,15 +18,6 @@ static UINT WM_MAGPIE_SCALINGCHANGED;
 // 窗口模式缩放时缩放窗口应遮挡源窗口和它的阴影，在四周留出 50 x DPI 缩放的空间
 static constexpr int WINDOWED_MODE_MIN_SPACE_AROUND = 2 * 50;
 
-static void InitMessage() noexcept {
-	[[maybe_unused]] static Ignore _ = []() {
-		WM_MAGPIE_SCALINGCHANGED =
-			RegisterWindowMessage(CommonSharedConstants::WM_MAGPIE_SCALINGCHANGED);
-
-		return Ignore();
-	}();
-}
-
 static bool IsTopmostWindow(HWND hWnd) noexcept {
 	return GetWindowExStyle(hWnd) & WS_EX_TOPMOST;
 }
@@ -77,7 +68,7 @@ ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 	_isResizingOrMoving = false;
 	_isPreparingForResizing = false;
 	_isMovingDueToSrcMoved = false;
-	_shouldWaitForRender = false;
+	_shouldWaitForGpu = false;
 	_areResizeHelperWindowsVisible = false;
 	_isSrcRepositioning = false;
 
@@ -93,8 +84,6 @@ ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 		Logger::Get().Error("已存在缩放窗口");
 		return ScalingError::ScalingFailedGeneral;
 	}
-
-	InitMessage();
 
 	bool isSrcInvisibleOrMinimized = false;
 	if (ScalingError error = _srcTracker.Set(hwndSrc, _options, isSrcInvisibleOrMinimized);
@@ -114,14 +103,17 @@ ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 		if (_options.IsWindowedMode()) {
 			Logger::Get().Info("已最大化的窗口不支持窗口模式缩放");
 			return ScalingError::BannedInWindowedMode;
-		} else if (!_options.RealIsAllowScalingMaximized()) {
+		} else if (!_options.IsAllowScalingMaximized()) {
 			Logger::Get().Info("源窗口已最大化");
 			return ScalingError::Maximized;
 		}
 	}
 
 	[[maybe_unused]] static Ignore _ = []() {
-		WNDCLASSEXW wcex{
+		WM_MAGPIE_SCALINGCHANGED =
+			RegisterWindowMessage(CommonSharedConstants::WM_MAGPIE_SCALINGCHANGED);
+
+		WNDCLASSEXW wcex = {
 			.cbSize = sizeof(wcex),
 			.lpfnWndProc = _WndProc,
 			.hInstance = wil::GetModuleInstanceHandle(),
@@ -306,7 +298,7 @@ ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 
 	LogRects(_srcTracker.SrcRect(), _rendererRect, _windowRect);
 
-	if (!_options.RealIsAllowScalingMaximized()) {
+	if (!_options.IsAllowScalingMaximized()) {
 		// 检查源窗口是否是无边框全屏窗口
 		if (srcWindowKind == SrcWindowKind::NoNativeFrame && _srcTracker.WindowRect() == _rendererRect) {
 			Logger::Get().Info("源窗口已全屏");
@@ -334,20 +326,9 @@ ScalingError ScalingWindow::_StartImpl(HWND hwndSrc) noexcept {
 void ScalingWindow::Start(HWND hwndSrc, ScalingOptions&& options) noexcept {
 	assert(!Handle());
 
-	assert(!options.effects.empty());
-	assert(options.cropping.Left >= 0 && options.cropping.Top >= 0 &&
-		options.cropping.Right >= 0 && options.cropping.Bottom >= 0);
-	assert(options.minFrameRate >= 0);
-	assert(!options.maxFrameRate.has_value() || *options.maxFrameRate > 0);
-	assert(options.cursorScaling >= 0);
-	assert(!options.autoHideCursorDelay.has_value() || *options.autoHideCursorDelay > 0);
-	assert(options.initialWindowedScaleFactor >= 0);
-	assert(!options.screenshotsDir.empty());
-	assert(options.showToast && options.showError && options.save);
-
-	options.Log();
 	// 缩放结束后失效
 	_options = std::move(options);
+	_options.Prepare();
 
 	ScalingError error = _StartImpl(hwndSrc);
 	if (error != ScalingError::NoError) {
@@ -412,7 +393,7 @@ void ScalingWindow::Render() noexcept {
 	// 创建 D3D 设备后（可能是 OS bug），第二次是我们隐藏系统光标。
 	_cursorManager->Update();
 
-	if (_renderer->Render(false, _shouldWaitForRender || _isFirstFrame) && _isFirstFrame) {
+	if (_renderer->Render(false, _shouldWaitForGpu || _isFirstFrame) && _isFirstFrame) {
 		_isFirstFrame = false;
 		// 第一帧渲染完成后显示缩放窗口
 		_Show();
@@ -1252,7 +1233,7 @@ void ScalingWindow::_Show() noexcept {
 	}
 
 	// 模拟独占全屏
-	if (_options.RealIsSimulateExclusiveFullscreen()) {
+	if (_options.IsSimulateExclusiveFullscreen()) {
 		// 延迟 1s 以避免干扰游戏的初始化，见 #495
 		([]()->winrt::fire_and_forget {
 			const uint32_t runId = RunId();
@@ -2115,14 +2096,14 @@ bool ScalingWindow::_EnsureCaptionVisibleOnScreen() noexcept {
 	}
 
 	// 为了避免光标位置跳跃应等待渲染而且不要使用 SWP_NOSENDCHANGING
-	_shouldWaitForRender = true;
+	_shouldWaitForGpu = true;
 	bool result = SetWindowPos(
 		Handle(),
 		NULL,
 		_windowRect.left, mi.rcWork.top, 0, 0,
 		SWP_NOACTIVATE | SWP_NOZORDER | SWP_NOREDRAW | SWP_NOSIZE
 	);
-	_shouldWaitForRender = false;
+	_shouldWaitForGpu = false;
 	return result;
 }
 

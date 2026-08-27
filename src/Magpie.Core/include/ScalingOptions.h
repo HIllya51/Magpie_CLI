@@ -150,28 +150,30 @@ enum class ScalingError {
 	CreateFenceFailed
 };
 
-struct ScalingFlags {
-	static constexpr uint32_t WindowedMode = 1;
-	static constexpr uint32_t DebugMode = 1 << 1;
-	static constexpr uint32_t DisableEffectCache = 1 << 2;
-	static constexpr uint32_t SaveEffectSources = 1 << 3;
-	static constexpr uint32_t WarningsAreErrors = 1 << 4;
-	static constexpr uint32_t SimulateExclusiveFullscreen = 1 << 5;
-	static constexpr uint32_t Is3DGameMode = 1 << 6;
-	static constexpr uint32_t CaptureTitleBar = 1 << 10;
-	static constexpr uint32_t AdjustCursorSpeed = 1 << 11;
-	static constexpr uint32_t DisableDirectFlip = 1 << 13;
-	static constexpr uint32_t DisableFontCache = 1 << 14;
-	static constexpr uint32_t AllowScalingMaximized = 1 << 15;
-	static constexpr uint32_t EnableStatisticsForDynamicDetection = 1 << 16;
-	// 只影响缩放行为，Magpie.Core 不负责启动 TouchHelper.exe
-	static constexpr uint32_t TouchSupportEnabled = 1 << 17;
-	static constexpr uint32_t InlineParams = 1 << 18;
-	static constexpr uint32_t DisableFP16 = 1 << 19;
-	static constexpr uint32_t BenchmarkMode = 1 << 20;
-	static constexpr uint32_t DeveloperMode = 1 << 21;
-	static constexpr uint32_t DisableTopmost = 1 << 22;
+enum class ScalingFlags : uint32_t {
+	None,
+	WindowedMode = 1,
+	DebugMode = 1 << 1,
+	DisableEffectCache = 1 << 2,
+	SaveEffectSources = 1 << 3,
+	WarningsAreErrors = 1 << 4,
+	SimulateExclusiveFullscreen = 1 << 5,
+	Is3DGameMode = 1 << 6,
+	CaptureTitleBar = 1 << 10,
+	AdjustCursorSpeed = 1 << 11,
+	DisableDirectFlip = 1 << 13,
+	DisableFontCache = 1 << 14,
+	AllowScalingMaximized = 1 << 15,
+	EnableStatisticsForDynamicDetection = 1 << 16,
+	// 只影响缩放行为，Magpie.Core 不负责启动 TouchHelper.exe,
+	TouchSupportEnabled = 1 << 17,
+	InlineParams = 1 << 18,
+	DisableFP16 = 1 << 19,
+	BenchmarkMode = 1 << 20,
+	DeveloperMode = 1 << 21,
+	DisableTopmost = 1 << 22
 };
+DEFINE_ENUM_FLAG_OPERATORS(ScalingFlags)
 
 struct ScalingOptions {
 	DEFINE_FLAG_ACCESSOR(IsWindowedMode, ScalingFlags::WindowedMode, flags)
@@ -195,12 +197,12 @@ struct ScalingOptions {
 	DEFINE_FLAG_ACCESSOR(IsDirectFlipDisabled, ScalingFlags::DisableDirectFlip, flags)
 
 	std::vector<EffectOption> effects;
-	uint32_t flags = ScalingFlags::AdjustCursorSpeed;
+	ScalingFlags flags = ScalingFlags::AdjustCursorSpeed;
 	Cropping cropping{};
 	GraphicsCardId graphicsCardId;
 	float minFrameRate = 0.0f;
 	std::optional<float> maxFrameRate;
-	float cursorScaling = 1.0f;
+	float cursorScaleFactor = 1.0f;
 	CaptureMethod captureMethod = CaptureMethod::GraphicsCapture;
 	MultiMonitorUsage multiMonitorUsage = MultiMonitorUsage::Closest;
 	OutputAlignment outputAlignment = OutputAlignment::Center;
@@ -219,21 +221,7 @@ struct ScalingOptions {
 	void (*showError)(HWND hwndTarget, ScalingError error) noexcept = nullptr;
 	void (*save)(const ScalingOptions& options, HWND hwndScaling) noexcept = nullptr;
 
-	void Log() const noexcept;
-
-	bool RealIsCaptureTitleBar() const noexcept {
-		// GDI 和 DwmSharedSurface 不支持捕获标题栏
-		return IsCaptureTitleBar() &&
-			captureMethod != CaptureMethod::GDI && captureMethod != CaptureMethod::DwmSharedSurface;
-	}
-
-	bool RealIsAllowScalingMaximized() const noexcept {
-		return IsAllowScalingMaximized() && !IsWindowedMode();
-	}
-
-	bool RealIsSimulateExclusiveFullscreen() const noexcept {
-		return IsSimulateExclusiveFullscreen() && !IsWindowedMode();
-	}
+	void Prepare() noexcept;
 };
 
 }

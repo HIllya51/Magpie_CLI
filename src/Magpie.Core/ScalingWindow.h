@@ -199,7 +199,7 @@ private:
 	// 用于区分调整大小和移动
 	bool _isPreparingForResizing = false;
 	bool _isMovingDueToSrcMoved = false;
-	bool _shouldWaitForRender = false;
+	bool _shouldWaitForGpu = false;
 	bool _areResizeHelperWindowsVisible = false;
 	bool _isSrcRepositioning = false;
 };

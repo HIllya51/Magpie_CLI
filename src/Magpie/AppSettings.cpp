@@ -113,7 +113,7 @@ static void WriteProfile(rapidjson::PrettyWriter<rapidjson::StringBuffer>& write
 	writer.Key("cursorScaling");
 	writer.Uint((uint32_t)profile.cursorScaling);
 	writer.Key("customCursorScaling");
-	writer.Double(profile.customCursorScaling);
+	writer.Double(profile.customCursorScaleFactor);
 	writer.Key("cursorInterpolationMode");
 	writer.Uint((uint32_t)profile.cursorInterpolationMode);
 	writer.Key("autoHideCursorEnabled");
@@ -224,6 +224,7 @@ bool AppSettings::Initialize() noexcept {
 	std::string configText;
 	if (!Win32Helper::ReadTextFile(existingConfigPath.c_str(), configText)) {
 		Logger::Get().Error("读取配置文件失败");
+
 		LocalizationService& ls = LocalizationService::Get();
 		winrt::hstring title = ls.GetLocalizedString(L"AppSettings_ErrorDialog_ReadFailed");
 		winrt::hstring content = ls.GetLocalizedString(L"AppSettings_ErrorDialog_ConfigLocation");
@@ -244,6 +245,7 @@ bool AppSettings::Initialize() noexcept {
 	doc.ParseInsitu(configText.data());
 	if (doc.HasParseError()) {
 		Logger::Get().Error(fmt::format("解析配置失败\n\t错误码: {}", (int)doc.GetParseError()));
+
 		LocalizationService& ls = LocalizationService::Get();
 		winrt::hstring title = ls.GetLocalizedString(L"AppSettings_ErrorDialog_NotValidJson");
 		winrt::hstring content = ls.GetLocalizedString(L"AppSettings_ErrorDialog_ConfigLocation");
@@ -1070,9 +1072,9 @@ bool AppSettings::_LoadProfile(
 
 	JsonHelper::ReadEnum(profileObj, "cursorScaling", profile.cursorScaling);
 	
-	JsonHelper::ReadFloat(profileObj, "customCursorScaling", profile.customCursorScaling);
-	if (profile.customCursorScaling < 0) {
-		profile.customCursorScaling = 1.0f;
+	JsonHelper::ReadFloat(profileObj, "customCursorScaling", profile.customCursorScaleFactor);
+	if (profile.customCursorScaleFactor < 0) {
+		profile.customCursorScaleFactor = 1.0f;
 	}
 
 	JsonHelper::ReadEnum(profileObj, "cursorInterpolationMode", profile.cursorInterpolationMode);
