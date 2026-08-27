@@ -86,32 +86,32 @@ void solvecursorscale(ScalingOptions& options, CursorScaling cursorScaling, floa
 
     switch (cursorScaling) {
     case CursorScaling::x0_5:
-        options.cursorScaling = 0.5;
+        options.cursorScaleFactor = 0.5;
         break;
     case CursorScaling::x0_75:
-        options.cursorScaling = 0.75;
+        options.cursorScaleFactor = 0.75;
         break;
     case CursorScaling::NoScaling:
-        options.cursorScaling = 1.0;
+        options.cursorScaleFactor = 1.0;
         break;
     case CursorScaling::x1_25:
-        options.cursorScaling = 1.25;
+        options.cursorScaleFactor = 1.25;
         break;
     case CursorScaling::x1_5:
-        options.cursorScaling = 1.5;
+        options.cursorScaleFactor = 1.5;
         break;
     case CursorScaling::x2:
-        options.cursorScaling = 2.0;
+        options.cursorScaleFactor = 2.0;
         break;
     case CursorScaling::Source:
         // 0 或负值表示和源窗口缩放比例相同
-        options.cursorScaling = 0;
+        options.cursorScaleFactor = 0;
         break;
     case CursorScaling::Custom:
-        options.cursorScaling = customCursorScaling;
+        options.cursorScaleFactor = customCursorScaling;
         break;
     default:
-        options.cursorScaling = 1.0;
+        options.cursorScaleFactor = 1.0;
         break;
     }
 }
