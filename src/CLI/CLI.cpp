@@ -283,6 +283,7 @@ std::optional<ScalingOptions> LoadMagOptions(const nlohmann::json& config, int p
 	}
 
     // 应用全局配置
+	options.IsKeepScreenOn(config["keepScreenOn"]);
     options.IsDeveloperMode(config["developerMode"]);
     options.IsBenchmarkMode(config["benchmarkMode"]);
 	options.IsTopmostDisabled(config["disableTopmost"]);
