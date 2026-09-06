@@ -140,6 +140,9 @@
     <ClInclude Include="include\LocalizationService.h">
       <Filter>Include</Filter>
     </ClInclude>
+    <ClInclude Include="KeepScreenOnHelper.h">
+      <Filter>Helpers</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="ScalingRuntime.cpp" />
@@ -233,6 +236,9 @@
     <ClCompile Include="SrcTracker.cpp" />
     <ClCompile Include="LocalizationService.cpp">
       <Filter>Services</Filter>
+    </ClCompile>
+    <ClCompile Include="KeepScreenOnHelper.cpp">
+      <Filter>Helpers</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
